@@ -16,16 +16,6 @@ const extensionConfig = {
   external: ["vscode"],
 };
 
-/*
-const webviewConfig = {
-  ...baseConfig,
-  target: "es2020",
-  format: "esm",
-  entryPoints: ["./src/webview/webview.js"],
-  outfile: "./out/webview.js",
-};
-*/
-
 (async () => {
   const args = process.argv.slice(2);
   try {
@@ -34,18 +24,15 @@ const webviewConfig = {
       console.log("[watch] build started");
 
       const extensionCtx = await context(extensionConfig);
-      //const webviewCtx = await context(webviewConfig);
 
       await Promise.all([
         extensionCtx.watch(),
-        //webviewCtx.watch()
       ]);
 
       console.log("[watch] watching...");
     } else {
       // Build source code
       await build(extensionConfig);
-      //await build(webviewConfig);
       console.log("build complete");
     }
   } catch (err) {

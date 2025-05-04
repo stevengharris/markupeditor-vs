@@ -7,8 +7,6 @@
  *
  */
 
-var uriPrefix;   // The vscode-required prefix used before the path to be able to load image src
-
 /** Set up message listeners used in the VSCode extension */
 bootstrapVsCode()
 

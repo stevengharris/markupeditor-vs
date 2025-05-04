@@ -95,8 +95,8 @@ export class MarkupEditorProvider {
         // Local paths to scripts run in the webview
         const extensionUri = this.context.extensionUri;
         const scriptMarkupConfigPath = vscode.Uri.joinPath(extensionUri, 'scripts', 'markupeditor_config.js');
-        const scriptMarkupPath = vscode.Uri.joinPath(extensionUri, 'scripts', 'markupeditor.umd.js');
-        const scriptMarkupBootstrapPath = vscode.Uri.joinPath(extensionUri, 'scripts', 'markupeditor_bootstrap.js');
+        const scriptMarkupPath = vscode.Uri.joinPath(extensionUri, 'scripts', 'markupeditor.js');
+        const scriptMarkupBootstrapPath = vscode.Uri.joinPath(extensionUri, 'scripts', 'markupeditor_vs.js');
 
         // And the uris we use to load scripts in the webview
         const scriptMarkupConfigUri = webview.asWebviewUri(scriptMarkupConfigPath);

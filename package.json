@@ -1,7 +1,7 @@
 {
     "name": "markupeditor",
     "displayName": "MarkupEditor",
-    "description": "WYSIWYG editing of HTML",
+    "description": "WYSIWYG editing for HTML",
     "author": {
         "name": "Steven G. Harris",
         "url": "https://stevengharris.com"
