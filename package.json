@@ -1,0 +1,127 @@
+{
+    "name": "markupeditor",
+    "displayName": "MarkupEditor",
+    "description": "WYSIWYG editing of HTML",
+    "author": {
+        "name": "Steven G. Harris",
+        "url": "https://stevengharris.com"
+    },
+    "publisher": "stevengharris",
+	"private": true,
+    "icon": "icon.png",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/stevengharris/markupeditorvs"
+    },
+    "bugs": {
+        "url": "https://github.com/stevengharris/markupeditorvs/issues"
+    },
+    "license": "MIT",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.89.0"
+    },
+    "qna": "https://github.com/stevengharris/markupeditorvs/issues",
+    "categories": [
+        "Other"
+    ],
+    "keywords": [
+        "wysiwyg",
+        "html",
+        "editor"
+    ],
+    "activationEvents": [],
+    "main": "./out/extension.js",
+    "contributes": {
+        "customEditors": [
+            {
+                "viewType": "markupeditor.editor",
+                "displayName": "MarkupEditor",
+                "selector": [
+                    {
+                        "filenamePattern": "*.html"
+                    }
+                ]
+            }
+        ],
+        "languages": [
+            {
+                "id": "html",
+                "extensions": [
+                    ".html"
+                ],
+                "aliases": [
+                    "HTML"
+                ]
+            }
+        ],
+        "configuration": {
+            "title": "MarkupEditor",
+            "properties": {
+                "markupeditor.menubar": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Show the menubar"
+                }
+            }
+        },
+        "menus": {
+            "editor/title": [
+                {
+                    "command": "markupeditor.openInTextEditor",
+                    "when": "activeCustomEditorId == 'markupeditor.editor'",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "markupeditor.openInMarkupEditor",
+                    "when": "resourceExtname == '.html' && activeEditor == 'workbench.editors.files.textFileEditor'",
+                    "group": "navigation@1"
+                }
+            ],
+            "commandPalette": [
+                {
+                    "command": "markupeditor.openInTextEditor",
+                    "when": "activeCustomEditorId == 'markupeditor.editor'"
+                },
+                {
+                    "command": "markupeditor.openInMarkupEditor",
+                    "when": "resourceExtname == '.html' && activeCustomEditorId != 'markupeditor.editor'"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "markupeditor.openInTextEditor",
+                "title": "Open in Text Editor",
+                "category": "MarkupEditor",
+                "icon": "$(notebook-open-as-text)"
+            },
+            {
+                "command": "markupeditor.openInMarkupEditor",
+                "title": "Open in MarkupEditor",
+                "category": "MarkupEditor",
+                "icon": "$(notebook-render-output)"
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "rimraf ./out && npm run package",
+        "compile": "node ./esbuild.js",
+        "package": "cross-env NODE_ENV=production node ./esbuild.js",
+        "watch": "node ./esbuild.js --watch",
+        "deploy": "vsce publish"
+    },
+    "devDependencies": {
+        "@types/mocha": "^10.0.1",
+        "@types/node": "16.x",
+        "@types/vscode": "^1.79.0",
+        "@vscode/codicons": "^0.0.20",
+        "@vscode/test-electron": "^2.3.0",
+        "@vscode/vsce": "^2.19.0",
+        "cross-env": "^7.0.3",
+        "esbuild": "^0.25.3",
+        "eslint": "^8.39.0",
+        "mocha": "^10.2.0",
+        "typescript": "^5.0.4"
+    }
+}

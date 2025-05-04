@@ -1,0 +1,30 @@
+#editor, .editor {
+	color: var(--vscode-foreground);
+	background-color: var(--vscode-editor-background);
+}
+
+/* We need to set the fonts in body because they apply not just to editable elements */
+body {
+    font-family: system, -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Lucida Grande";
+    font: -apple-system-body;
+}
+
+.vscode-dark {
+    a {
+        color: #4183c4;
+    }
+    code {
+        color: white;
+        background-color: #808080;
+    }
+    .resize-container img {
+        outline: 1px white dashed;
+    }
+    .resize-handle-nw,
+    .resize-handle-ne,
+    .resize-handle-sw,
+    .resize-handle-se {
+        outline: 1px white solid;
+        background: black;
+    }
+}
