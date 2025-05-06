@@ -13,6 +13,12 @@ export function getNonce() {
     return text;
 };
 
+/**
+ * Return the path of the directory containing `document`.
+ * 
+ * @param {TextDocument} document   A TextDocument; e.g., used for a CustomTextEditor
+ * @returns {string}                The directory path to the `document`
+ */
 export function pathToDocument(document) {
     const pathComponents = document.fileName.split('/');
     pathComponents.splice(pathComponents.length - 1, 1);

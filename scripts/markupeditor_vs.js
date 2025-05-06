@@ -33,18 +33,25 @@ async function bootstrapVsCode() {
     // it's a deserialized JSON object, not the one from the sender. The properties of 
     // an object passed by the sender are generally available, since they are properly 
     // serialized and deserialized via JSON.
-    window.addEventListener('message', async (event) => {
-        const message = event.data;
-        switch (message.type) {
-            case 'update':
-                populateHTML(message.contents, message.uriPrefix, message.path);
-                return;
-            default:
-                handleMUCommand(message.command);
-                return;
-        };
-    });
+    window.addEventListener('message', handleMessage);
 };
+
+/**
+ * Handle the MessageEvents coming from the extension in extension.js.
+ * 
+ * @param {HTML MessageEvent} event The MessageEvent being listened for
+ */
+async function handleMessage(event) {
+    const message = event.data;
+    switch (message.type) {
+       case 'update':
+           populateHTML(message.contents, message.uriPath);
+           return;
+       default:
+           handleMUCommand(message.command);
+           return;
+    };
+}
 
 /** Cause the MarkupEditor to do something (e.g., in response to a hotkey) */
 function handleMUCommand(command) {
@@ -79,7 +86,7 @@ function bootstrapCommonHtml() {
 /**
  * Populate the HTML to be edited.
  */
-function populateHTML(contents, uriPrefix, path) {
+function populateHTML(contents, uriPath) {
     if (!contents) return;
     const template = document.createElement('template');
     template.innerHTML = contents;
@@ -93,7 +100,7 @@ function populateHTML(contents, uriPrefix, path) {
         // implementation detail hidden behind asWebviewUri(). To load an image, its src has to 
         // include this prefix, but the image.src is always relative to the document.
         if ((srcComponents.length > 0) && (srcComponents[0] != 'https:')) { // The image source is at or below
-            image.src = uriPrefix + path.substring(1) + '/' + image.src;
+            image.src = uriPath + '/' + image.src;
         };
     };
     MU.setHTML(template.innerHTML);

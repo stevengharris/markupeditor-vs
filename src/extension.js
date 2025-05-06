@@ -32,48 +32,8 @@ export function activate(context) {
 	context.subscriptions.push(openInMarkupEditor);
 	context.subscriptions.push(MarkupEditorProvider.register(context));
 
-	// MU commands are for the MarkupEditor. They are mapped to hotkeys in the package.json file 
-	// and invoke some action in the MarkupEditor hosted in the MarkupEditorPanel.
-	registerMUCommands();
-
 	console.log("MarkupEditor extension is activated.")
 }
 
 /** Called when the extension is deactivated */ 
 export function deactivate() {}
-
-/**
- * The MUCommands invoke a MarkupEditor editing action in the MarkupEditorPanel.
- */
-function registerMUCommands() {
-	vscode.commands.registerCommand('markupeditor.toggleBold', () => {
-		MarkupEditorProvider.currentPanel.webview.postMessage({
-			command: 'toggleBold'
-		});
-	});
-	vscode.commands.registerCommand('markupeditor.toggleItalic', () => {
-		MarkupEditorProvider.currentPanel.webview.postMessage({
-			command: 'toggleItalic'
-		});
-	});
-	vscode.commands.registerCommand('markupeditor.toggleUnderline', () => {
-		MarkupEditorProvider.currentPanel.webview.postMessage({
-			command: 'toggleUnderline'
-		});
-	});
-	vscode.commands.registerCommand('markupeditor.toggleCode', () => {
-		MarkupEditorProvider.currentPanel.webview.postMessage({
-			command: 'toggleCode'
-		});
-	});
-	vscode.commands.registerCommand('markupeditor.indent', () => {
-		MarkupEditorProvider.currentPanel.webview.postMessage({
-			command: 'indent'
-		});
-	});
-	vscode.commands.registerCommand('markupeditor.outdent', () => {
-		MarkupEditorProvider.currentPanel.webview.postMessage({
-			command: 'outdent'
-		});
-	});
-};
