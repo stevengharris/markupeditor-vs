@@ -7,7 +7,7 @@
         "url": "https://stevengharris.com"
     },
     "publisher": "stevengharris",
-	"private": true,
+    "private": true,
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -106,10 +106,15 @@
     },
     "scripts": {
         "vscode:prepublish": "rimraf ./out && npm run package",
+        "precompile": "rm -f ./scripts/markupeditor.js && cp ./node_modules/markupeditor/dist/markupeditor.umd.js ./scripts/markupeditor.js",
         "compile": "node ./esbuild.js",
         "package": "cross-env NODE_ENV=production node ./esbuild.js",
         "watch": "node ./esbuild.js --watch",
         "deploy": "vsce publish"
+    },
+    "dependencies": {
+        "markupeditor": "file:../markupeditor",
+        "prosemirror-state": "^1.4.3"
     },
     "devDependencies": {
         "@types/mocha": "^10.0.1",

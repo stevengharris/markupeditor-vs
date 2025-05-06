@@ -6921,7 +6921,7 @@
   // Is true for both iOS and iPadOS for convenience
   const ios = safari && (/Mobile\/\w+/.test(agent) || !!nav && nav.maxTouchPoints > 2);
   const mac$4 = ios || (nav ? /Mac/.test(nav.platform) : false);
-  const windows = nav ? /Win/.test(nav.platform) : false;
+  const windows$1 = nav ? /Win/.test(nav.platform) : false;
   const android = /Android \d/.test(agent);
   const webkit = !!doc && "webkitFontSmoothing" in doc.documentElement.style;
   const webkit_version = webkit ? +(/\bAppleWebKit\/(\d+)/.exec(navigator.userAgent) || [0, 0])[1] : 0;
@@ -9391,7 +9391,7 @@
   }
   function findDirection(view, pos) {
       let $pos = view.state.doc.resolve(pos);
-      if (!(chrome || windows) && $pos.parent.inlineContent) {
+      if (!(chrome || windows$1) && $pos.parent.inlineContent) {
           let coords = view.coordsAtPos(pos);
           if (pos > $pos.start()) {
               let before = view.coordsAtPos(pos - 1);
@@ -12670,7 +12670,8 @@
     return name
   }
 
-  const mac$2 = typeof navigator != "undefined" ? /Mac|iP(hone|[oa]d)/.test(navigator.platform) : false;
+  const mac$2 = typeof navigator != "undefined" && /Mac|iP(hone|[oa]d)/.test(navigator.platform);
+  const windows = typeof navigator != "undefined" && /Win/.test(navigator.platform);
   function normalizeKeyName(name) {
       let parts = name.split(/-(?!$)/), result = parts[parts.length - 1];
       if (result == "Space")
@@ -12776,12 +12777,14 @@
                   if (noShift && noShift(view.state, view.dispatch, view))
                       return true;
               }
-              if ((event.shiftKey || event.altKey || event.metaKey || name.charCodeAt(0) > 127) &&
+              if ((event.altKey || event.metaKey || event.ctrlKey) &&
+                  // Ctrl-Alt may be used for AltGr on Windows
+                  !(windows && event.ctrlKey && event.altKey) &&
                   (baseName = base[event.keyCode]) && baseName != name) {
                   // Try falling back to the keyCode when there's a modifier
                   // active or the character produced isn't ASCII, and our table
                   // produces a different name from the the keyCode. See #668,
-                  // #1060
+                  // #1060, #1529.
                   let fromCode = map[modifiers(baseName, event)];
                   if (fromCode && fromCode(view.state, view.dispatch, view))
                       return true;
@@ -17395,13 +17398,13 @@
   //     Determines whether the menu floats, i.e. whether it sticks to
   //     the top of the viewport when the editor is partially scrolled
   //     out of view.
-  function menuBar$1(options) {
+  function toolbar(options) {
     return new Plugin({
-      view(editorView) { return new MenuBarView(editorView, options) }
+      view(editorView) { return new ToolbarView(editorView, options) }
     })
   }
 
-  class MenuBarView {
+  class ToolbarView {
     constructor(editorView, options) {
       this.editorView = editorView;
       this.options = options;
@@ -21639,11 +21642,18 @@
       dropCursor(),
       gapCursor(),
     ];
-    if (options.menuBar !== false)
-      plugins.push(menuBar$1({floating: options.floatingMenu !== false,
-                            content: options.menuContent || buildMenuItems(options.schema).fullMenu}));
-    if (options.history !== false)
-      plugins.push(history());
+    if (options.toolbar !== false) {
+      plugins.push(
+        toolbar(
+          {
+            floating: options.floatingMenu !== false,
+            content: options.menuContent || buildMenuItems(options.schema).fullMenu
+          }
+        )
+      );
+    }
+
+    if (options.history !== false) plugins.push(history());
 
     // Add the MarkupEditor plugin
     plugins.push(muPlugin);
