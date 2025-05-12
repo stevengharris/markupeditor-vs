@@ -7,5 +7,5 @@
  */
 
 var markupConfig = {
-    menuBar: true,
+    toolbar: true,
 }

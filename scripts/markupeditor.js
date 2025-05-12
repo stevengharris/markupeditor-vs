@@ -13175,13 +13175,6 @@
         return $pos.node(0).resolve($pos.before(d + 1));
     return null;
   }
-  function cellWrapping($pos) {
-    for (let d = $pos.depth; d > 0; d--) {
-      const role = $pos.node(d).type.spec.tableRole;
-      if (role === "cell" || role === "header_cell") return $pos.node(d);
-    }
-    return null;
-  }
   function isInTable(state) {
     const $head = state.selection.$head;
     for (let d = $head.depth; d > 0; d--)
@@ -13775,76 +13768,6 @@
       dispatch(tr);
     }
     return true;
-  }
-  function splitCell(state, dispatch) {
-    const nodeTypes = tableNodeTypes(state.schema);
-    return splitCellWithType(({ node }) => {
-      return nodeTypes[node.type.spec.tableRole];
-    })(state, dispatch);
-  }
-  function splitCellWithType(getCellType) {
-    return (state, dispatch) => {
-      var _a;
-      const sel = state.selection;
-      let cellNode;
-      let cellPos;
-      if (!(sel instanceof CellSelection)) {
-        cellNode = cellWrapping(sel.$from);
-        if (!cellNode) return false;
-        cellPos = (_a = cellAround(sel.$from)) == null ? void 0 : _a.pos;
-      } else {
-        if (sel.$anchorCell.pos != sel.$headCell.pos) return false;
-        cellNode = sel.$anchorCell.nodeAfter;
-        cellPos = sel.$anchorCell.pos;
-      }
-      if (cellNode == null || cellPos == null) {
-        return false;
-      }
-      if (cellNode.attrs.colspan == 1 && cellNode.attrs.rowspan == 1) {
-        return false;
-      }
-      if (dispatch) {
-        let baseAttrs = cellNode.attrs;
-        const attrs = [];
-        const colwidth = baseAttrs.colwidth;
-        if (baseAttrs.rowspan > 1) baseAttrs = { ...baseAttrs, rowspan: 1 };
-        if (baseAttrs.colspan > 1) baseAttrs = { ...baseAttrs, colspan: 1 };
-        const rect = selectedRect(state), tr = state.tr;
-        for (let i = 0; i < rect.right - rect.left; i++)
-          attrs.push(
-            colwidth ? {
-              ...baseAttrs,
-              colwidth: colwidth && colwidth[i] ? [colwidth[i]] : null
-            } : baseAttrs
-          );
-        let lastCell;
-        for (let row = rect.top; row < rect.bottom; row++) {
-          let pos = rect.map.positionAt(row, rect.left, rect.table);
-          if (row == rect.top) pos += cellNode.nodeSize;
-          for (let col = rect.left, i = 0; col < rect.right; col++, i++) {
-            if (col == rect.left && row == rect.top) continue;
-            tr.insert(
-              lastCell = tr.mapping.map(pos + rect.tableStart, 1),
-              getCellType({ node: cellNode, row, col }).createAndFill(attrs[i])
-            );
-          }
-        }
-        tr.setNodeMarkup(
-          cellPos,
-          getCellType({ node: cellNode, row: rect.top, col: rect.left }),
-          attrs[0]
-        );
-        if (sel instanceof CellSelection)
-          tr.setSelection(
-            new CellSelection(
-              tr.doc.resolve(sel.$anchorCell.pos),
-              lastCell ? tr.doc.resolve(lastCell) : void 0
-            )
-          );
-        dispatch(tr);
-      }
-      return true;
-    };
   }
   function deprecated_toggleHeader(type) {
     return function(state, dispatch) {
@@ -16771,615 +16694,116 @@
   */
   const findPrev = findCommand(true, -1);
 
-  function createCommonjsModule(fn, module) {
-  	return module = { exports: {} }, fn(module, module.exports), module.exports;
-  }
+  const toolbarPlugin = new Plugin({
+    view(editorView) {
+      // Create new class to hold editor and internal state such as editorView, HTML Dom elements, commands
+      let toolbarView = new ToolbarView(toolbarButtons, editorView);
 
-  var crel = createCommonjsModule(function (module, exports) {
+      // Put the toolbar at the top of the current editor.
+      editorView.dom.parentNode.insertBefore(toolbarView.dom, editorView.dom.parentNode.firstChild);
 
-  /* Copyright (C) 2012 Kory Nunn
-  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-  The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-  NOTE:
-  This code is formatted for run-speed and to assist compilers.
-  This might make it harder to read at times, but the code's intention should be transparent. */
-
-  // IIFE our function
-  (function (exporter) {
-      // Define our function and its properties
-      // These strings are used multiple times, so this makes things smaller once compiled
-      var func = 'function',
-          isNodeString = 'isNode',
-          // Helper functions used throughout the script
-          isType = function (object, type) { return typeof object === type; },
-          // Recursively appends children to given element. As a text node if not already an element
-          appendChild = function (element, child) {
-              if (child !== null) {
-                  if (Array.isArray(child)) { // Support (deeply) nested child elements
-                      child.map(function (subChild) { return appendChild(element, subChild); });
-                  } else {
-                      if (!crel[isNodeString](child)) {
-                          child = document.createTextNode(child);
-                      }
-                      element.appendChild(child);
-                  }
-              }
-          };
-      //
-      function crel (element, settings) {
-          // Define all used variables / shortcuts here, to make things smaller once compiled
-          var args = arguments, // Note: assigned to a variable to assist compilers.
-              index = 1,
-              key,
-              attribute;
-          // If first argument is an element, use it as is, otherwise treat it as a tagname
-          element = crel.isElement(element) ? element : document.createElement(element);
-          // Check if second argument is a settings object
-          if (isType(settings, 'object') && !crel[isNodeString](settings) && !Array.isArray(settings)) {
-              // Don't treat settings as a child
-              index++;
-              // Go through settings / attributes object, if it exists
-              for (key in settings) {
-                  // Store the attribute into a variable, before we potentially modify the key
-                  attribute = settings[key];
-                  // Get mapped key / function, if one exists
-                  key = crel.attrMap[key] || key;
-                  // Note: We want to prioritise mapping over properties
-                  if (isType(key, func)) {
-                      key(element, attribute);
-                  } else if (isType(attribute, func)) { // ex. onClick property
-                      element[key] = attribute;
-                  } else {
-                      // Set the element attribute
-                      element.setAttribute(key, attribute);
-                  }
-              }
-          }
-          // Loop through all arguments, if any, and append them to our element if they're not `null`
-          for (; index < args.length; index++) {
-              appendChild(element, args[index]);
-          }
-
-          return element;
-      }
-
-      // Used for mapping attribute keys to supported versions in bad browsers, or to custom functionality
-      crel.attrMap = {};
-      crel.isElement = function (object) { return object instanceof Element; };
-      crel[isNodeString] = function (node) { return node instanceof Node; };
-      // Expose proxy interface
-      if (typeof Proxy != "undefined") {
-          crel.proxy = new Proxy(crel, {
-              get: function (target, key) {
-                  !(key in crel) && (crel[key] = crel.bind(null, key));
-                  return crel[key];
-              }
-          });
-      }
-      // Export crel
-      exporter(crel, func);
-  })(function (product, func) {
-      {
-          // Export for Browserify / CommonJS format
-          module.exports = product;
-      }
-  });
+      return toolbarView;
+    }
   });
 
-  const SVG = "http://www.w3.org/2000/svg";
-  const XLINK = "http://www.w3.org/1999/xlink";
+  class ToolbarView {
 
-  const prefix$3 = "ProseMirror-icon";
+    constructor(toolbarButtons, editorView) {
+      this.buttons = toolbarButtons;
+      this.editorView = editorView;
 
-  function hashPath(path) {
-    let hash = 0;
-    for (let i = 0; i < path.length; i++)
-      hash = (((hash << 5) - hash) + path.charCodeAt(i)) | 0;
-    return hash
-  }
-
-  function getIcon(icon) {
-    let node = document.createElement("div");
-    node.className = prefix$3;
-    if (icon.path) {
-      let name = "pm-icon-" + hashPath(icon.path).toString(16);
-      if (!document.getElementById(name)) buildSVG(name, icon);
-      let svg = node.appendChild(document.createElementNS(SVG, "svg"));
-      svg.style.width = (icon.width / icon.height) + "em";
-      let use = svg.appendChild(document.createElementNS(SVG, "use"));
-      use.setAttributeNS(XLINK, "href", /([^#]*)/.exec(document.location)[1] + "#" + name);
-    } else if (icon.dom) {
-      node.appendChild(icon.dom.cloneNode(true));
-    } else {
-      node.appendChild(document.createElement("span")).textContent = icon.text || '';
-      if (icon.css) node.firstChild.style.cssText = icon.css;
-    }
-    return node
-  }
-
-  function buildSVG(name, data) {
-    let collection = document.getElementById(prefix$3 + "-collection");
-    if (!collection) {
-      collection = document.createElementNS(SVG, "svg");
-      collection.id = prefix$3 + "-collection";
-      collection.style.display = "none";
-      document.body.insertBefore(collection, document.body.firstChild);
-    }
-    let sym = document.createElementNS(SVG, "symbol");
-    sym.id = name;
-    sym.setAttribute("viewBox", "0 0 " + data.width + " " + data.height);
-    let path = sym.appendChild(document.createElementNS(SVG, "path"));
-    path.setAttribute("d", data.path);
-    collection.appendChild(sym);
-  }
-
-  const prefix$2 = "ProseMirror-menu";
-
-  // ::- An icon or label that, when clicked, executes a command.
-  class MenuItem {
-    // :: (MenuItemSpec)
-    constructor(spec) {
-      // :: MenuItemSpec
-      // The spec used to create the menu item.
-      this.spec = spec;
+      // Create dom representation of toolbox.
+      this.addToolbar(toolbarButtons, editorView);
     }
 
-    // :: (EditorView) → {dom: dom.Node, update: (EditorState) → bool}
-    // Renders the icon according to its [display
-    // spec](#menu.MenuItemSpec.display), and adds an event handler which
-    // executes the command when the representation is clicked.
-    render(view) {
-      let spec = this.spec;
-      let dom = spec.render ? spec.render(view)
-          : spec.icon ? getIcon(spec.icon)
-          : spec.label ? crel("div", null, translate(view, spec.label))
-          : null;
-      if (!dom) throw new RangeError("MenuItem without icon or label property")
-      if (spec.title) {
-        const title = (typeof spec.title === "function" ? spec.title(view.state) : spec.title);
-        dom.setAttribute("title", translate(view, title));
-      }
-      if (spec.class) dom.classList.add(spec.class);
-      if (spec.css) dom.style.cssText += spec.css;
+    addToolbar(toolbarButtons, editorView) {
+      // Create div containing button
+      this.dom = document.createElement("div");
+      this.dom.style.display = "block";
+      toolbarButtons.forEach(({ dom }) => this.dom.appendChild(dom));
 
-      dom.addEventListener("mousedown", e => {
+      this.dom.addEventListener("mousedown", e => {
         e.preventDefault();
-        if (!dom.classList.contains(prefix$2 + "-disabled"))
-          spec.run(view.state, view.dispatch, view, e);
+        editorView.focus();
+        toolbarButtons.forEach(({ command, dom }) => {
+          if (dom.contains(e.target))
+            command(editorView.state, editorView.dispatch, editorView);
+        });
       });
-
-      function update(state) {
-        if (spec.select) {
-          let selected = spec.select(state);
-          dom.style.display = selected ? "" : "none";
-          if (!selected) return false
-        }
-        let enabled = true;
-        if (spec.enable) {
-          enabled = spec.enable(state) || false;
-          setClass(dom, prefix$2 + "-disabled", !enabled);
-        }
-        if (spec.active) {
-          let active = enabled && spec.active(state) || false;
-          setClass(dom, prefix$2 + "-active", active);
-        }
-        return true
-      }
-
-      return {dom, update}
-    }
-  }
-
-  function translate(view, text) {
-    return view._props.translate ? view._props.translate(text) : text
-  }
-
-  // MenuItemSpec:: interface
-  // The configuration object passed to the `MenuItem` constructor.
-  //
-  //   run:: (EditorState, (Transaction), EditorView, dom.Event)
-  //   The function to execute when the menu item is activated.
-  //
-  //   select:: ?(EditorState) → bool
-  //   Optional function that is used to determine whether the item is
-  //   appropriate at the moment. Deselected items will be hidden.
-  //
-  //   enable:: ?(EditorState) → bool
-  //   Function that is used to determine if the item is enabled. If
-  //   given and returning false, the item will be given a disabled
-  //   styling.
-  //
-  //   active:: ?(EditorState) → bool
-  //   A predicate function to determine whether the item is 'active' (for
-  //   example, the item for toggling the strong mark might be active then
-  //   the cursor is in strong text).
-  //
-  //   render:: ?(EditorView) → dom.Node
-  //   A function that renders the item. You must provide either this,
-  //   [`icon`](#menu.MenuItemSpec.icon), or [`label`](#MenuItemSpec.label).
-  //
-  //   icon:: ?Object
-  //   Describes an icon to show for this item. The object may specify
-  //   an SVG icon, in which case its `path` property should be an [SVG
-  //   path
-  //   spec](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d),
-  //   and `width` and `height` should provide the viewbox in which that
-  //   path exists. Alternatively, it may have a `text` property
-  //   specifying a string of text that makes up the icon, with an
-  //   optional `css` property giving additional CSS styling for the
-  //   text. _Or_ it may contain `dom` property containing a DOM node.
-  //
-  //   label:: ?string
-  //   Makes the item show up as a text label. Mostly useful for items
-  //   wrapped in a [drop-down](#menu.Dropdown) or similar menu. The object
-  //   should have a `label` property providing the text to display.
-  //
-  //   title:: ?union<string, (EditorState) → string>
-  //   Defines DOM title (mouseover) text for the item.
-  //
-  //   class:: ?string
-  //   Optionally adds a CSS class to the item's DOM representation.
-  //
-  //   css:: ?string
-  //   Optionally adds a string of inline CSS to the item's DOM
-  //   representation.
-
-  let lastMenuEvent = {time: 0, node: null};
-  function markMenuEvent(e) {
-    lastMenuEvent.time = Date.now();
-    lastMenuEvent.node = e.target;
-  }
-  function isMenuEvent(wrapper) {
-    return Date.now() - 100 < lastMenuEvent.time &&
-      lastMenuEvent.node && wrapper.contains(lastMenuEvent.node)
-  }
-
-  // ::- A drop-down menu, displayed as a label with a downwards-pointing
-  // triangle to the right of it.
-  class Dropdown {
-    // :: ([MenuElement], ?Object)
-    // Create a dropdown wrapping the elements. Options may include
-    // the following properties:
-    //
-    // **`label`**`: string`
-    //   : The label to show on the drop-down control.
-    //
-    // **`title`**`: string`
-    //   : Sets the
-    //     [`title`](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/title)
-    //     attribute given to the menu control.
-    //
-    // **`class`**`: string`
-    //   : When given, adds an extra CSS class to the menu control.
-    //
-    // **`css`**`: string`
-    //   : When given, adds an extra set of CSS styles to the menu control.
-    constructor(content, options) {
-      this.options = options || {};
-      this.content = Array.isArray(content) ? content : [content];
     }
 
-    // :: (EditorView) → {dom: dom.Node, update: (EditorState)}
-    // Render the dropdown menu and sub-items.
-    render(view) {
-      let content = renderDropdownItems(this.content, view);
+    update(view, lastState) {
+      console.log("update");
+      // Update if popup should show or not.
+      //this.selectionUpdate(view, lastState);
 
-      let label = crel("div", {class: prefix$2 + "-dropdown " + (this.options.class || ""),
-                               style: this.options.css},
-                       translate(view, this.options.label));
-      if (this.options.title) label.setAttribute("title", translate(view, this.options.title));
-      let wrap = crel("div", {class: prefix$2 + "-dropdown-wrap"}, label);
-      let open = null, listeningOnClose = null;
-      let close = () => {
-        if (open && open.close()) {
-          open = null;
-          window.removeEventListener("mousedown", listeningOnClose);
-        }
-      };
-      label.addEventListener("mousedown", e => {
-        e.preventDefault();
-        markMenuEvent(e);
-        if (open) {
-          close();
-        } else {
-          open = this.expand(wrap, content.dom);
-          window.addEventListener("mousedown", listeningOnClose = () => {
-            if (!isMenuEvent(wrap)) close();
-          });
-        }
+      // If clicked on a toolbox button, make an update on that:
+      this.buttons.forEach(({ command, dom }) => {
+        command(this.editorView.state, null, this.editorView);
+        //dom.style.display = active ? "" : "none"
       });
-
-      function update(state) {
-        let inner = content.update(state);
-        wrap.style.display = inner ? "" : "none";
-        return inner
-      }
-
-      return {dom: wrap, update}
     }
 
-    expand(dom, items) {
-      let menuDOM = crel("div", {class: prefix$2 + "-dropdown-menu " + (this.options.class || "")}, items);
+    selectionUpdate(view, lastState) {
+      console.log("selectionUpdate");
+      let state = view.state;
+      // Don't do anything if the document/selection didn't change
+      if (lastState && lastState.doc.eq(state.doc) &&
+        lastState.selection.eq(state.selection)) return
 
-      let done = false;
-      function close() {
-        if (done) return
-        done = true;
-        dom.removeChild(menuDOM);
-        return true
-      }
-      dom.appendChild(menuDOM);
-      return {close, node: menuDOM}
-    }
-  }
+      // Hide the tooltip if the selection is empty
+      //if (state.selection.empty) {
+      //	this.dom.style.display = "none"
+      //  	return
+      //}
 
-  function renderDropdownItems(items, view) {
-    let rendered = [], updates = [];
-    for (let i = 0; i < items.length; i++) {
-      let {dom, update} = items[i].render(view);
-      rendered.push(crel("div", {class: prefix$2 + "-dropdown-item"}, dom));
-      updates.push(update);
-    }
-    return {dom: rendered, update: combineUpdates(updates, rendered)}
-  }
-
-  function combineUpdates(updates, nodes) {
-    return state => {
-      let something = false;
-      for (let i = 0; i < updates.length; i++) {
-        let up = updates[i](state);
-        nodes[i].style.display = up ? "" : "none";
-        if (up) something = true;
-      }
-      return something
-    }
-  }
-
-  // ::- Represents a submenu wrapping a group of elements that start
-  // hidden and expand to the right when hovered over or tapped.
-  class DropdownSubmenu {
-    // :: ([MenuElement], ?Object)
-    // Creates a submenu for the given group of menu elements. The
-    // following options are recognized:
-    //
-    // **`label`**`: string`
-    //   : The label to show on the submenu.
-    constructor(content, options) {
-      this.options = options || {};
-      this.content = Array.isArray(content) ? content : [content];
+      // Otherwise, reposition it and update its content
+      this.dom.style.display = "";
+      let { from, to } = state.selection;
+      // These are in screen coordinates
+      let start = view.coordsAtPos(from), end = view.coordsAtPos(to);
+      // The box in which the tooltip is positioned, to use as base
+      let box = this.dom.offsetParent.getBoundingClientRect();
+      // Find a center-ish x position from the selection endpoints (when
+      // crossing lines, end may be more to the left)
+      let left = Math.max((start.left + end.left) / 2, start.left + 3);
+      this.dom.style.left = (left - box.left) - 425 + "px";
+      this.dom.style.bottom = (box.bottom - start.top) + "px";
+      //this.tooltip.textContent = to - from
     }
 
-    // :: (EditorView) → {dom: dom.Node, update: (EditorState) → bool}
-    // Renders the submenu.
-    render(view) {
-      let items = renderDropdownItems(this.content, view);
-
-      let label = crel("div", {class: prefix$2 + "-submenu-label"}, translate(view, this.options.label));
-      let wrap = crel("div", {class: prefix$2 + "-submenu-wrap"}, label,
-                     crel("div", {class: prefix$2 + "-submenu"}, items.dom));
-      let listeningOnClose = null;
-      label.addEventListener("mousedown", e => {
-        e.preventDefault();
-        markMenuEvent(e);
-        setClass(wrap, prefix$2 + "-submenu-wrap-active");
-        if (!listeningOnClose)
-          window.addEventListener("mousedown", listeningOnClose = () => {
-            if (!isMenuEvent(wrap)) {
-              wrap.classList.remove(prefix$2 + "-submenu-wrap-active");
-              window.removeEventListener("mousedown", listeningOnClose);
-              listeningOnClose = null;
-            }
-          });
-      });
-
-      function update(state) {
-        let inner = items.update(state);
-        wrap.style.display = inner ? "" : "none";
-        return inner
-      }
-      return {dom: wrap, update}
-    }
+    destroy() { this.dom.remove(); }
   }
 
-  // :: (EditorView, [union<MenuElement, [MenuElement]>]) → {dom: ?dom.DocumentFragment, update: (EditorState) → bool}
-  // Render the given, possibly nested, array of menu elements into a
-  // document fragment, placing separators between them (and ensuring no
-  // superfluous separators appear when some of the groups turn out to
-  // be empty).
-  function renderGrouped(view, content) {
-    let result = document.createDocumentFragment();
-    let updates = [], separators = [];
-    for (let i = 0; i < content.length; i++) {
-      let items = content[i], localUpdates = [], localNodes = [];
-      for (let j = 0; j < items.length; j++) {
-        let {dom, update} = items[j].render(view);
-        let span = crel("span", {class: prefix$2 + "item"}, dom);
-        result.appendChild(span);
-        localNodes.push(span);
-        localUpdates.push(update);
-      }
-      if (localUpdates.length) {
-        updates.push(combineUpdates(localUpdates, localNodes));
-        if (i < content.length - 1)
-          separators.push(result.appendChild(separator()));
-      }
-    }
-
-    function update(state) {
-      let something = false, needSep = false;
-      for (let i = 0; i < updates.length; i++) {
-        let hasContent = updates[i](state);
-        if (i) separators[i - 1].style.display = needSep && hasContent ? "" : "none";
-        needSep = hasContent;
-        if (hasContent) something = true;
-      }
-      return something
-    }
-    return {dom: result, update}
+  function toolbarButton(text, name) {
+    let div = document.createElement("div");
+    div.className = "material-symbols-outlined";
+    div.textContent = name ?? text;
+    return div;
   }
 
-  function separator() {
-    return crel("span", {class: prefix$2 + "separator"})
-  }
+  // Buttons in toolbar. They have a command assignment (command), and DOM representation description (dom).
+  let toolbarButtons = [
+    { command: toggleMark(schema.marks.strong), dom: toolbarButton(null, "format_indent_increase") },
+    { command: toggleMark(schema.marks.em), dom: toolbarButton(null, "format_italic") },
+    { command: wrapIn(schema.nodes.blockquote), dom: toolbarButton(null, "format_bold") },
+    { command: wrapIn(schema.nodes.blockquote), dom: toolbarButton(null, "format_indent_decrease") }
+  ];
 
-  // :: Object
-  // A set of basic editor-related icons. Contains the properties
-  // `join`, `lift`, `selectParentNode`, `undo`, `redo`, `strong`, `em`,
-  // `code`, `link`, `bulletList`, `orderedList`, and `blockquote`, each
-  // holding an object that can be used as the `icon` option to
-  // `MenuItem`.
-  const icons = {
-    join: {
-      width: 800, height: 900,
-      path: "M0 75h800v125h-800z M0 825h800v-125h-800z M250 400h100v-100h100v100h100v100h-100v100h-100v-100h-100z"
-    },
-    lift: {
-      width: 1024, height: 1024,
-      path: "M219 310v329q0 7-5 12t-12 5q-8 0-13-5l-164-164q-5-5-5-13t5-13l164-164q5-5 13-5 7 0 12 5t5 12zM1024 749v109q0 7-5 12t-12 5h-987q-7 0-12-5t-5-12v-109q0-7 5-12t12-5h987q7 0 12 5t5 12zM1024 530v109q0 7-5 12t-12 5h-621q-7 0-12-5t-5-12v-109q0-7 5-12t12-5h621q7 0 12 5t5 12zM1024 310v109q0 7-5 12t-12 5h-621q-7 0-12-5t-5-12v-109q0-7 5-12t12-5h621q7 0 12 5t5 12zM1024 91v109q0 7-5 12t-12 5h-987q-7 0-12-5t-5-12v-109q0-7 5-12t12-5h987q7 0 12 5t5 12z"
-    },
-    selectParentNode: {text: "\u2b1a", css: "font-weight: bold"},
-    undo: {
-      width: 1024, height: 1024,
-      path: "M761 1024c113-206 132-520-313-509v253l-384-384 384-384v248c534-13 594 472 313 775z"
-    },
-    redo: {
-      width: 1024, height: 1024,
-      path: "M576 248v-248l384 384-384 384v-253c-446-10-427 303-313 509-280-303-221-789 313-775z"
-    },
-    strong: {
-      width: 805, height: 1024,
-      path: "M317 869q42 18 80 18 214 0 214-191 0-65-23-102-15-25-35-42t-38-26-46-14-48-6-54-1q-41 0-57 5 0 30-0 90t-0 90q0 4-0 38t-0 55 2 47 6 38zM309 442q24 4 62 4 46 0 81-7t62-25 42-51 14-81q0-40-16-70t-45-46-61-24-70-8q-28 0-74 7 0 28 2 86t2 86q0 15-0 45t-0 45q0 26 0 39zM0 950l1-53q8-2 48-9t60-15q4-6 7-15t4-19 3-18 1-21 0-19v-37q0-561-12-585-2-4-12-8t-25-6-28-4-27-2-17-1l-2-47q56-1 194-6t213-5q13 0 39 0t38 0q40 0 78 7t73 24 61 40 42 59 16 78q0 29-9 54t-22 41-36 32-41 25-48 22q88 20 146 76t58 141q0 57-20 102t-53 74-78 48-93 27-100 8q-25 0-75-1t-75-1q-60 0-175 6t-132 6z"
-    },
-    em: {
-      width: 585, height: 1024,
-      path: "M0 949l9-48q3-1 46-12t63-21q16-20 23-57 0-4 35-165t65-310 29-169v-14q-13-7-31-10t-39-4-33-3l10-58q18 1 68 3t85 4 68 1q27 0 56-1t69-4 56-3q-2 22-10 50-17 5-58 16t-62 19q-4 10-8 24t-5 22-4 26-3 24q-15 84-50 239t-44 203q-1 5-7 33t-11 51-9 47-3 32l0 10q9 2 105 17-1 25-9 56-6 0-18 0t-18 0q-16 0-49-5t-49-5q-78-1-117-1-29 0-81 5t-69 6z"
-    },
-    u: {
-      width: 24, height: 24,
-      path: "M12 17c3.31 0 6-2.69 6-6V3h-2.5v8c0 1.93-1.57 3.5-3.5 3.5S8.5 12.93 8.5 11V3H6v8c0 3.31 2.69 6 6 6zm-7 2v2h14v-2H5z"
-    },
-    s: {
-      width: 24, height: 24,
-      path: "M6.85,7.08C6.85,4.37,9.45,3,12.24,3c1.64,0,3,0.49,3.9,1.28c0.77,0.65,1.46,1.73,1.46,3.24h-3.01 c0-0.31-0.05-0.59-0.15-0.85c-0.29-0.86-1.2-1.28-2.25-1.28c-1.86,0-2.34,1.02-2.34,1.7c0,0.48,0.25,0.88,0.74,1.21 C10.97,8.55,11.36,8.78,12,9H7.39C7.18,8.66,6.85,8.11,6.85,7.08z M21,12v-2H3v2h9.62c1.15,0.45,1.96,0.75,1.96,1.97 c0,1-0.81,1.67-2.28,1.67c-1.54,0-2.93-0.54-2.93-2.51H6.4c0,0.55,0.08,1.13,0.24,1.58c0.81,2.29,3.29,3.3,5.67,3.3 c2.27,0,5.3-0.89,5.3-4.05c0-0.3-0.01-1.16-0.48-1.94H21V12z"
-    },
-    code: {
-      width: 896, height: 1024,
-      path: "M608 192l-96 96 224 224-224 224 96 96 288-320-288-320zM288 192l-288 320 288 320 96-96-224-224 224-224-96-96z"
-    },
-    link: {
-      width: 951, height: 1024,
-      path: "M832 694q0-22-16-38l-118-118q-16-16-38-16-24 0-41 18 1 1 10 10t12 12 8 10 7 14 2 15q0 22-16 38t-38 16q-8 0-15-2t-14-7-10-8-12-12-10-10q-18 17-18 41 0 22 16 38l117 118q15 15 38 15 22 0 38-14l84-83q16-16 16-38zM430 292q0-22-16-38l-117-118q-16-16-38-16-22 0-38 15l-84 83q-16 16-16 38 0 22 16 38l118 118q15 15 38 15 24 0 41-17-1-1-10-10t-12-12-8-10-7-14-2-15q0-22 16-38t38-16q8 0 15 2t14 7 10 8 12 12 10 10q18-17 18-41zM941 694q0 68-48 116l-84 83q-47 47-116 47-69 0-116-48l-117-118q-47-47-47-116 0-70 50-119l-50-50q-49 50-118 50-68 0-116-48l-118-118q-48-48-48-116t48-116l84-83q47-47 116-47 69 0 116 48l117 118q47 47 47 116 0 70-50 119l50 50q49-50 118-50 68 0 116 48l118 118q48 48 48 116z"
-    },
-    bulletList: {
-      width: 768, height: 896,
-      path: "M0 512h128v-128h-128v128zM0 256h128v-128h-128v128zM0 768h128v-128h-128v128zM256 512h512v-128h-512v128zM256 256h512v-128h-512v128zM256 768h512v-128h-512v128z"
-    },
-    orderedList: {
-      width: 768, height: 896,
-      path: "M320 512h448v-128h-448v128zM320 768h448v-128h-448v128zM320 128v128h448v-128h-448zM79 384h78v-256h-36l-85 23v50l43-2v185zM189 590c0-36-12-78-96-78-33 0-64 6-83 16l1 66c21-10 42-15 67-15s32 11 32 28c0 26-30 58-110 112v50h192v-67l-91 2c49-30 87-66 87-113l1-1z"
-    },
-    blockquote: {
-      width: 640, height: 896,
-      path: "M0 448v256h256v-256h-128c0 0 0-128 128-128v-128c0 0-256 0-256 256zM640 320v-128c0 0-256 0-256 256v256h256v-256h-128c0 0 0-128 128-128z"
-    }
-  };
+  /*
+  import crel from "crel"
 
-  // :: MenuItem
-  // Menu item for the `joinUp` command.
-  const joinUpItem = new MenuItem({
-    title: "Join with above block",
-    run: joinUp,
-    select: state => joinUp(state),
-    icon: icons.join
-  });
 
-  // :: MenuItem
-  // Menu item for the `lift` command.
-  const liftItem = new MenuItem({
-    title: "Lift out of enclosing block",
-    run: lift,
-    select: state => lift(state),
-    icon: icons.lift
-  });
 
-  // :: MenuItem
-  // Menu item for the `selectParentNode` command.
-  const selectParentNodeItem = new MenuItem({
-    title: "Select parent node",
-    run: selectParentNode,
-    select: state => selectParentNode(state),
-    icon: icons.selectParentNode
-  });
+  import {renderGrouped} from "prosemirror-menu"
 
-  // :: MenuItem
-  // Menu item for the `undo` command.
-  let undoItem = new MenuItem({
-    title: "Undo last change",
-    run: undo,
-    enable: state => undo(state),
-    icon: icons.undo
-  });
+  import styles from '@material-design-icons/font/outlined.css';
 
-  // :: MenuItem
-  // Menu item for the `redo` command.
-  let redoItem = new MenuItem({
-    title: "Redo last undone change",
-    run: redo,
-    enable: state => redo(state),
-    icon: icons.redo
-  });
-
-  // :: (NodeType, Object) → MenuItem
-  // Build a menu item for wrapping the selection in a given node type.
-  // Adds `run` and `select` properties to the ones present in
-  // `options`. `options.attrs` may be an object or a function.
-  function wrapItem(nodeType, options) {
-    let passedOptions = {
-      run(state, dispatch) {
-        // FIXME if (options.attrs instanceof Function) options.attrs(state, attrs => wrapIn(nodeType, attrs)(state))
-        return wrapIn(nodeType, options.attrs)(state, dispatch)
-      },
-      select(state) {
-        return wrapIn(nodeType, options.attrs instanceof Function ? null : options.attrs)(state)
-      }
-    };
-    for (let prop in options) passedOptions[prop] = options[prop];
-    return new MenuItem(passedOptions)
-  }
-
-  // :: (NodeType, Object) → MenuItem
-  // Build a menu item for changing the type of the textblock around the
-  // selection to the given type. Provides `run`, `active`, and `select`
-  // properties. Others must be given in `options`. `options.attrs` may
-  // be an object to provide the attributes for the textblock node.
-  function blockTypeItem(nodeType, options) {
-    let command = setBlockType(nodeType, options.attrs);
-    let passedOptions = {
-      run: command,
-      enable(state) { return command(state) },
-      active(state) {
-        let {$from, to, node} = state.selection;
-        if (node) return node.hasMarkup(nodeType, options.attrs)
-        return to <= $from.end() && $from.parent.hasMarkup(nodeType, options.attrs)
-      }
-    };
-    for (let prop in options) passedOptions[prop] = options[prop];
-    return new MenuItem(passedOptions)
-  }
-
-  // Work around classList.toggle being broken in IE11
-  function setClass(dom, cls, on) {
-    if (on) dom.classList.add(cls);
-    else dom.classList.remove(cls);
-  }
-
-  const prefix$1 = "ProseMirror-menubar";
+  const prefix = "ProseMirror-menubar"
 
   function isIOS() {
     if (typeof navigator == "undefined") return false
-    let agent = navigator.userAgent;
+    let agent = navigator.userAgent
     return !/Edge\/\d/.test(agent) && /AppleWebKit/.test(agent) && /Mobile\/\w+/.test(agent)
   }
 
@@ -17398,7 +16822,7 @@
   //     Determines whether the menu floats, i.e. whether it sticks to
   //     the top of the viewport when the editor is partially scrolled
   //     out of view.
-  function toolbar(options) {
+  export function toolbar(options) {
     return new Plugin({
       view(editorView) { return new ToolbarView(editorView, options) }
     })
@@ -17406,105 +16830,105 @@
 
   class ToolbarView {
     constructor(editorView, options) {
-      this.editorView = editorView;
-      this.options = options;
+      this.editorView = editorView
+      this.options = options
 
-      this.wrapper = crel("div", {class: prefix$1 + "-wrapper"});
-      this.menu = this.wrapper.appendChild(crel("div", {class: prefix$1}));
-      this.menu.className = prefix$1;
-      this.spacer = null;
+      this.wrapper = crel("div", {class: prefix + "-wrapper"})
+      this.menu = this.wrapper.appendChild(crel("div", {class: prefix}))
+      this.menu.className = prefix
+      this.spacer = null
 
-      editorView.dom.parentNode.replaceChild(this.wrapper, editorView.dom);
-      this.wrapper.appendChild(editorView.dom);
+      editorView.dom.parentNode.replaceChild(this.wrapper, editorView.dom)
+      this.wrapper.appendChild(editorView.dom)
 
-      this.maxHeight = 0;
-      this.widthForMaxHeight = 0;
-      this.floating = false;
+      this.maxHeight = 0
+      this.widthForMaxHeight = 0
+      this.floating = false
 
-      let {dom, update} = renderGrouped(this.editorView, this.options.content);
-      this.contentUpdate = update;
-      this.menu.appendChild(dom);
-      this.update();
+      let {dom, update} = renderGrouped(this.editorView, this.options.content)
+      this.contentUpdate = update
+      this.menu.appendChild(dom)
+      this.update()
 
       if (options.floating && !isIOS()) {
-        this.updateFloat();
-        let potentialScrollers = getAllWrapping(this.wrapper);
+        this.updateFloat()
+        let potentialScrollers = getAllWrapping(this.wrapper)
         this.scrollFunc = (e) => {
-          let root = this.editorView.root;
+          let root = this.editorView.root
           if (!(root.body || root).contains(this.wrapper)) {
-              potentialScrollers.forEach(el => el.removeEventListener("scroll", this.scrollFunc));
+              potentialScrollers.forEach(el => el.removeEventListener("scroll", this.scrollFunc))
           } else {
-              this.updateFloat(e.target.getBoundingClientRect && e.target);
+              this.updateFloat(e.target.getBoundingClientRect && e.target)
           }
-        };
-        potentialScrollers.forEach(el => el.addEventListener('scroll', this.scrollFunc));
+        }
+        potentialScrollers.forEach(el => el.addEventListener('scroll', this.scrollFunc))
       }
     }
 
     update() {
-      this.contentUpdate(this.editorView.state);
+      this.contentUpdate(this.editorView.state)
 
       if (this.floating) {
-        this.updateScrollCursor();
+        this.updateScrollCursor()
       } else {
         if (this.menu.offsetWidth != this.widthForMaxHeight) {
-          this.widthForMaxHeight = this.menu.offsetWidth;
-          this.maxHeight = 0;
+          this.widthForMaxHeight = this.menu.offsetWidth
+          this.maxHeight = 0
         }
         if (this.menu.offsetHeight > this.maxHeight) {
-          this.maxHeight = this.menu.offsetHeight;
-          this.menu.style.minHeight = this.maxHeight + "px";
+          this.maxHeight = this.menu.offsetHeight
+          this.menu.style.minHeight = this.maxHeight + "px"
         }
       }
     }
 
     updateScrollCursor() {
-      let selection = this.editorView.root.getSelection();
+      let selection = this.editorView.root.getSelection()
       if (!selection.focusNode) return
-      let rects = selection.getRangeAt(0).getClientRects();
-      let selRect = rects[selectionIsInverted(selection) ? 0 : rects.length - 1];
+      let rects = selection.getRangeAt(0).getClientRects()
+      let selRect = rects[selectionIsInverted(selection) ? 0 : rects.length - 1]
       if (!selRect) return
-      let menuRect = this.menu.getBoundingClientRect();
+      let menuRect = this.menu.getBoundingClientRect()
       if (selRect.top < menuRect.bottom && selRect.bottom > menuRect.top) {
-        let scrollable = findWrappingScrollable(this.wrapper);
-        if (scrollable) scrollable.scrollTop -= (menuRect.bottom - selRect.top);
+        let scrollable = findWrappingScrollable(this.wrapper)
+        if (scrollable) scrollable.scrollTop -= (menuRect.bottom - selRect.top)
       }
     }
 
     updateFloat(scrollAncestor) {
       let parent = this.wrapper, editorRect = parent.getBoundingClientRect(),
-          top = scrollAncestor ? Math.max(0, scrollAncestor.getBoundingClientRect().top) : 0;
+          top = scrollAncestor ? Math.max(0, scrollAncestor.getBoundingClientRect().top) : 0
 
       if (this.floating) {
         if (editorRect.top >= top || editorRect.bottom < this.menu.offsetHeight + 10) {
-          this.floating = false;
-          this.menu.style.position = this.menu.style.left = this.menu.style.top = this.menu.style.width = "";
-          this.menu.style.display = "";
-          this.spacer.parentNode.removeChild(this.spacer);
-          this.spacer = null;
+          this.floating = false
+          this.menu.style.position = this.menu.style.left = this.menu.style.top = this.menu.style.width = ""
+          this.menu.style.display = ""
+          this.spacer.parentNode.removeChild(this.spacer)
+          this.spacer = null
         } else {
-          let border = (parent.offsetWidth - parent.clientWidth) / 2;
-          this.menu.style.left = (editorRect.left + border) + "px";
-          this.menu.style.display = (editorRect.top > window.innerHeight ? "none" : "");
-          if (scrollAncestor) this.menu.style.top = top + "px";
+          let border = (parent.offsetWidth - parent.clientWidth) / 2
+          this.menu.style.left = (editorRect.left + border) + "px"
+          this.menu.style.display = (editorRect.top > window.innerHeight ? "none" : "")
+          if (scrollAncestor) this.menu.style.top = top + "px"
         }
       } else {
         if (editorRect.top < top && editorRect.bottom >= this.menu.offsetHeight + 10) {
-          this.floating = true;
-          let menuRect = this.menu.getBoundingClientRect();
-          this.menu.style.left = menuRect.left + "px";
-          this.menu.style.width = menuRect.width + "px";
-          if (scrollAncestor) this.menu.style.top = top + "px";
-          this.menu.style.position = "fixed";
-          this.spacer = crel("div", {class: prefix$1 + "-spacer", style: `height: ${menuRect.height}px`});
-          parent.insertBefore(this.spacer, this.menu);
+          this.floating = true
+          let menuRect = this.menu.getBoundingClientRect()
+          this.menu.style.left = menuRect.left + "px"
+          this.menu.style.width = menuRect.width + "px"
+          if (scrollAncestor) this.menu.style.top = top + "px"
+          this.menu.style.position = "fixed"
+          this.spacer = crel("div", {class: prefix + "-spacer", style: `height: ${menuRect.height}px`})
+          parent.insertBefore(this.spacer, this.menu)
         }
       }
     }
 
     destroy() {
       if (this.wrapper.parentNode)
-        this.wrapper.parentNode.replaceChild(this.editorView.dom, this.wrapper);
+        this.wrapper.parentNode.replaceChild(this.editorView.dom, this.wrapper)
     }
   }
 
@@ -17520,422 +16944,12 @@
   }
 
   function getAllWrapping(node) {
-      let res = [window];
+      let res = [window]
       for (let cur = node.parentNode; cur; cur = cur.parentNode)
-          res.push(cur);
+          res.push(cur)
       return res
   }
-
-  const prefix = "ProseMirror-prompt";
-
-  function openPrompt(options) {
-    let wrapper = document.body.appendChild(document.createElement("div"));
-    wrapper.className = prefix;
-
-    let mouseOutside = e => { if (!wrapper.contains(e.target)) close(); };
-    setTimeout(() => window.addEventListener("mousedown", mouseOutside), 50);
-    let close = () => {
-      window.removeEventListener("mousedown", mouseOutside);
-      if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-    };
-
-    let domFields = [];
-    for (let name in options.fields) domFields.push(options.fields[name].render());
-
-    let submitButton = document.createElement("button");
-    submitButton.type = "submit";
-    submitButton.className = prefix + "-submit";
-    submitButton.textContent = "OK";
-    let cancelButton = document.createElement("button");
-    cancelButton.type = "button";
-    cancelButton.className = prefix + "-cancel";
-    cancelButton.textContent = "Cancel";
-    cancelButton.addEventListener("click", close);
-
-    let form = wrapper.appendChild(document.createElement("form"));
-    if (options.title) form.appendChild(document.createElement("h5")).textContent = options.title;
-    domFields.forEach(field => {
-      form.appendChild(document.createElement("div")).appendChild(field);
-    });
-    let buttons = form.appendChild(document.createElement("div"));
-    buttons.className = prefix + "-buttons";
-    buttons.appendChild(submitButton);
-    buttons.appendChild(document.createTextNode(" "));
-    buttons.appendChild(cancelButton);
-
-    let box = wrapper.getBoundingClientRect();
-    wrapper.style.top = ((window.innerHeight - box.height) / 2) + "px";
-    wrapper.style.left = ((window.innerWidth - box.width) / 2) + "px";
-
-    let submit = () => {
-      let params = getValues(options.fields, domFields);
-      if (params) {
-        close();
-        options.callback(params);
-      }
-    };
-
-    form.addEventListener("submit", e => {
-      e.preventDefault();
-      submit();
-    });
-
-    form.addEventListener("keydown", e => {
-      if (e.keyCode == 27) {
-        e.preventDefault();
-        close();
-      } else if (e.keyCode == 13 && !(e.ctrlKey || e.metaKey || e.shiftKey)) {
-        e.preventDefault();
-        submit();
-      } else if (e.keyCode == 9) {
-        window.setTimeout(() => {
-          if (!wrapper.contains(document.activeElement)) close();
-        }, 500);
-      }
-    });
-
-    let input = form.elements[0];
-    if (input) input.focus();
-  }
-
-  function getValues(fields, domFields) {
-    let result = Object.create(null), i = 0;
-    for (let name in fields) {
-      let field = fields[name], dom = domFields[i++];
-      let value = field.read(dom), bad = field.validate(value);
-      if (bad) {
-        reportInvalid(dom, bad);
-        return null
-      }
-      result[name] = field.clean(value);
-    }
-    return result
-  }
-
-  function reportInvalid(dom, message) {
-    // FIXME this is awful and needs a lot more work
-    let parent = dom.parentNode;
-    let msg = parent.appendChild(document.createElement("div"));
-    msg.style.left = (dom.offsetLeft + dom.offsetWidth + 2) + "px";
-    msg.style.top = (dom.offsetTop - 5) + "px";
-    msg.className = "ProseMirror-invalid";
-    msg.textContent = message;
-    setTimeout(() => parent.removeChild(msg), 1500);
-  }
-
-  // ::- The type of field that `FieldPrompt` expects to be passed to it.
-  class Field {
-    // :: (Object)
-    // Create a field with the given options. Options support by all
-    // field types are:
-    //
-    // **`value`**`: ?any`
-    //   : The starting value for the field.
-    //
-    // **`label`**`: string`
-    //   : The label for the field.
-    //
-    // **`required`**`: ?bool`
-    //   : Whether the field is required.
-    //
-    // **`validate`**`: ?(any) → ?string`
-    //   : A function to validate the given value. Should return an
-    //     error message if it is not valid.
-    constructor(options) { this.options = options; }
-
-    // render:: (state: EditorState, props: Object) → dom.Node
-    // Render the field to the DOM. Should be implemented by all subclasses.
-
-    // :: (dom.Node) → any
-    // Read the field's value from its DOM node.
-    read(dom) { return dom.value }
-
-    // :: (any) → ?string
-    // A field-type-specific validation function.
-    validateType(_value) {}
-
-    validate(value) {
-      if (!value && this.options.required)
-        return "Required field"
-      return this.validateType(value) || (this.options.validate && this.options.validate(value))
-    }
-
-    clean(value) {
-      return this.options.clean ? this.options.clean(value) : value
-    }
-  }
-
-  // ::- A field class for single-line text fields.
-  class TextField extends Field {
-    render() {
-      let input = document.createElement("input");
-      input.type = "text";
-      input.placeholder = this.options.label;
-      input.value = this.options.value || "";
-      input.autocomplete = "off";
-      return input
-    }
-  }
-
-  // Helpers to create specific types of items
-
-  function canInsert(state, nodeType) {
-    let $from = state.selection.$from;
-    for (let d = $from.depth; d >= 0; d--) {
-      let index = $from.index(d);
-      if ($from.node(d).canReplaceWith(index, index, nodeType)) return true
-    }
-    return false
-  }
-
-  function insertImageItem(nodeType) {
-    return new MenuItem({
-      title: "Insert image",
-      label: "Image",
-      enable(state) { return canInsert(state, nodeType) },
-      run(state, _, view) {
-        let {from, to} = state.selection, attrs = null;
-        if (state.selection instanceof NodeSelection && state.selection.node.type == nodeType)
-          attrs = state.selection.node.attrs;
-        openPrompt({
-          title: "Insert image",
-          fields: {
-            src: new TextField({label: "Location", required: true, value: attrs && attrs.src}),
-            title: new TextField({label: "Title", value: attrs && attrs.title}),
-            alt: new TextField({label: "Description",
-                                value: attrs ? attrs.alt : state.doc.textBetween(from, to, " ")})
-          },
-          callback(attrs) {
-            view.dispatch(view.state.tr.replaceSelectionWith(nodeType.createAndFill(attrs)));
-            view.focus();
-          }
-        });
-      }
-    })
-  }
-
-  function cmdItem(cmd, options) {
-    let passedOptions = {
-      label: options.title,
-      run: cmd
-    };
-    for (let prop in options) passedOptions[prop] = options[prop];
-    if ((!options.enable || options.enable === true) && !options.select)
-      passedOptions[options.enable ? "enable" : "select"] = state => cmd(state);
-
-    return new MenuItem(passedOptions)
-  }
-
-  function markActive(state, type) {
-    let {from, $from, to, empty} = state.selection;
-    if (empty) return type.isInSet(state.storedMarks || $from.marks())
-    else return state.doc.rangeHasMark(from, to, type)
-  }
-
-  function markItem(markType, options) {
-    let passedOptions = {
-      active(state) { return markActive(state, markType) },
-      enable: true
-    };
-    for (let prop in options) passedOptions[prop] = options[prop];
-    return cmdItem(toggleMark(markType), passedOptions)
-  }
-
-  function linkItem(markType) {
-    return new MenuItem({
-      title: "Add or remove link",
-      icon: icons.link,
-      active(state) { return markActive(state, markType) },
-      enable(state) { return !state.selection.empty },
-      run(state, dispatch, view) {
-        if (markActive(state, markType)) {
-          toggleMark(markType)(state, dispatch);
-          return true
-        }
-        openPrompt({
-          title: "Create a link",
-          fields: {
-            href: new TextField({
-              label: "Link target",
-              required: true
-            }),
-            title: new TextField({label: "Title"})
-          },
-          callback(attrs) {
-            toggleMark(markType, attrs)(view.state, view.dispatch);
-            view.focus();
-          }
-        });
-      }
-    })
-  }
-
-  function wrapListItem(nodeType, options) {
-    return cmdItem(wrapInList(nodeType, options.attrs), options)
-  }
-
-  function tableItem(title, command) {
-    return new MenuItem({
-      title: title,
-      label: title,
-      enable() { return true },  // TODO: Fix
-      run(state, dispatch) { command(state, dispatch); }
-    })
-  }
-
-  // :: (Schema) → Object
-  // Given a schema, look for default mark and node types in it and
-  // return an object with relevant menu items relating to those marks:
-  //
-  // **`toggleStrong`**`: MenuItem`
-  //   : A menu item to toggle the [strong mark](#schema-basic.StrongMark).
-  //
-  // **`toggleEm`**`: MenuItem`
-  //   : A menu item to toggle the [emphasis mark](#schema-basic.EmMark).
-  //
-  // **`toggleCode`**`: MenuItem`
-  //   : A menu item to toggle the [code font mark](#schema-basic.CodeMark).
-  //
-  // **`toggleLink`**`: MenuItem`
-  //   : A menu item to toggle the [link mark](#schema-basic.LinkMark).
-  //
-  // **`insertImage`**`: MenuItem`
-  //   : A menu item to insert an [image](#schema-basic.Image).
-  //
-  // **`wrapBulletList`**`: MenuItem`
-  //   : A menu item to wrap the selection in a [bullet list](#schema-list.BulletList).
-  //
-  // **`wrapOrderedList`**`: MenuItem`
-  //   : A menu item to wrap the selection in an [ordered list](#schema-list.OrderedList).
-  //
-  // **`wrapBlockQuote`**`: MenuItem`
-  //   : A menu item to wrap the selection in a [block quote](#schema-basic.BlockQuote).
-  //
-  // **`makeParagraph`**`: MenuItem`
-  //   : A menu item to set the current textblock to be a normal
-  //     [paragraph](#schema-basic.Paragraph).
-  //
-  // **`makeCodeBlock`**`: MenuItem`
-  //   : A menu item to set the current textblock to be a
-  //     [code block](#schema-basic.CodeBlock).
-  //
-  // **`makeHead[N]`**`: MenuItem`
-  //   : Where _N_ is 1 to 6. Menu items to set the current textblock to
-  //     be a [heading](#schema-basic.Heading) of level _N_.
-  //
-  // **`insertHorizontalRule`**`: MenuItem`
-  //   : A menu item to insert a horizontal rule.
-  //
-  // The return value also contains some prefabricated menu elements and
-  // menus, that you can use instead of composing your own menu from
-  // scratch:
-  //
-  // **`insertMenu`**`: Dropdown`
-  //   : A dropdown containing the `insertImage` and
-  //     `insertHorizontalRule` items.
-  //
-  // **`typeMenu`**`: Dropdown`
-  //   : A dropdown containing the items for making the current
-  //     textblock a paragraph, code block, or heading.
-  //
-  // **`fullMenu`**`: [[MenuElement]]`
-  //   : An array of arrays of menu elements for use as the full menu
-  //     for, for example the [menu bar](https://github.com/prosemirror/prosemirror-menu#user-content-menubar).
-  function buildMenuItems(schema) {
-    let r = {}, type;
-    if (type = schema.marks.strong)
-      r.toggleStrong = markItem(type, {title: "Toggle strong style", icon: icons.strong});
-    if (type = schema.marks.em)
-      r.toggleEm = markItem(type, {title: "Toggle emphasis", icon: icons.em});
-    if (type = schema.marks.u)
-      r.toggleU = markItem(type, {title: "Toggle underline", icon: icons.u});
-    if (type = schema.marks.code)
-      r.toggleCode = markItem(type, {title: "Toggle code font", icon: icons.code});
-    if (type = schema.marks.s)
-      r.toggleS = markItem(type, {title: "Toggle strikethrough", icon: icons.s});
-    if (type = schema.marks.link)
-      r.toggleLink = linkItem(type);
-
-    if (type = schema.nodes.image)
-      r.insertImage = insertImageItem(type);
-    if (type = schema.nodes.bullet_list)
-      r.wrapBulletList = wrapListItem(type, {
-        title: "Wrap in bullet list",
-        icon: icons.bulletList
-      });
-    if (type = schema.nodes.ordered_list)
-      r.wrapOrderedList = wrapListItem(type, {
-        title: "Wrap in ordered list",
-        icon: icons.orderedList
-      });
-    if (type = schema.nodes.blockquote)
-      r.wrapBlockQuote = wrapItem(type, {
-        title: "Wrap in block quote",
-        icon: icons.blockquote
-      });
-    if (type = schema.nodes.paragraph)
-      r.makeParagraph = blockTypeItem(type, {
-        title: "Change to paragraph",
-        label: "Plain"
-      });
-    if (type = schema.nodes.code_block)
-      r.makeCodeBlock = blockTypeItem(type, {
-        title: "Change to code block",
-        label: "Code"
-      });
-    if (type = schema.nodes.heading)
-      for (let i = 1; i <= 10; i++)
-        r["makeHead" + i] = blockTypeItem(type, {
-          title: "Change to heading " + i,
-          label: "Level " + i,
-          attrs: {level: i}
-        });
-    if (type = schema.nodes.horizontal_rule) {
-      let hr = type;
-      r.insertHorizontalRule = new MenuItem({
-        title: "Insert horizontal rule",
-        label: "Horizontal rule",
-        enable(state) { return canInsert(state, hr) },
-        run(state, dispatch) { dispatch(state.tr.replaceSelectionWith(hr.create())); }
-      });
-    }
-    if (type = schema.nodes.table) {
-      r.addColumnBefore = tableItem('Insert column before', addColumnBefore);
-      r.addColumnAfter = tableItem('Insert column after', addColumnAfter);
-      r.deleteColumn = tableItem('Delete column', deleteColumn);
-      r.addRowBefore = tableItem('Insert row before', addRowBefore);
-      r.addRowAfter = tableItem('Insert row after', addRowAfter);
-      r.deleteRow = tableItem('Delete row', deleteRow);
-      r.deleteTable = tableItem('Delete table', deleteTable);
-      r.mergeCells = tableItem('Merge cells', mergeCells);
-      r.splitCell = tableItem('Split cell', splitCell);
-      r.toggleHeaderRow = tableItem('Toggle header row', toggleHeaderRow);
-    }
-
-    let cut = arr => arr.filter(x => x);
-    r.insertMenu = new Dropdown(cut([r.insertImage, r.insertHorizontalRule]), {label: "Insert"});
-    r.typeMenu = new Dropdown(cut([r.makeParagraph, r.makeCodeBlock, r.makeHead1 && new DropdownSubmenu(cut([
-      r.makeHead1, r.makeHead2, r.makeHead3, r.makeHead4, r.makeHead5, r.makeHead6
-    ]), {label: "Heading"})]), {label: "Type..."});
-    r.tableMenu = new Dropdown(cut([
-      r.addColumnBefore, 
-      r.addColumnAfter, 
-      r.deleteColumn, 
-      r.addRowBefore, 
-      r.addRowAfter, 
-      r.deleteRow, 
-      r.deleteTable, 
-      r.mergeCells, 
-      r.splitCell, 
-      r.toggleHeaderRow]), { label: 'Table' });
-
-    r.inlineMenu = [cut([r.toggleStrong, r.toggleEm, r.toggleU, r.toggleCode, r.toggleS, r.toggleLink])];
-    r.blockMenu = [cut([r.wrapBulletList, r.wrapOrderedList, r.wrapBlockQuote, joinUpItem,
-                        liftItem, selectParentNodeItem])];
-    r.fullMenu = r.inlineMenu.concat([[r.insertMenu, r.typeMenu, r.tableMenu]], [[undoItem, redoItem]], r.blockMenu);
-
-    return r
-  }
+  */
 
   /**
   Input rules are regular expressions describing a piece of text
@@ -21642,15 +20656,16 @@
       dropCursor(),
       gapCursor(),
     ];
-    if (options.toolbar !== false) {
-      plugins.push(
-        toolbar(
-          {
-            floating: options.floatingMenu !== false,
-            content: options.menuContent || buildMenuItems(options.schema).fullMenu
-          }
-        )
-      );
+    {
+      // TODO: toolbarPlugin needs to be replaced with something senstive to options, like a ToobarSpec
+      plugins.push(toolbarPlugin);
+        //toolbar(
+        //  {
+        //    floating: options.floatingMenu !== false,
+        //    content: options.menuContent || buildMenuItems(options.schema).fullMenu
+        //  }
+        //)
+      //)
     }
 
     if (options.history !== false) plugins.push(history());
