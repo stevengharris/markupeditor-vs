@@ -9797,7 +9797,7 @@
           this.mouseDown = null;
           this.lastKeyCode = null;
           this.lastKeyCodeTime = 0;
-          this.lastClick = { time: 0, x: 0, y: 0, type: "" };
+          this.lastClick = { time: 0, x: 0, y: 0, type: "", button: 0 };
           this.lastSelectionOrigin = null;
           this.lastSelectionTime = 0;
           this.lastIOSEnter = 0;
@@ -10038,13 +10038,14 @@
       view.input.shiftKey = event.shiftKey;
       let flushed = forceDOMFlush(view);
       let now = Date.now(), type = "singleClick";
-      if (now - view.input.lastClick.time < 500 && isNear(event, view.input.lastClick) && !event[selectNodeModifier]) {
+      if (now - view.input.lastClick.time < 500 && isNear(event, view.input.lastClick) && !event[selectNodeModifier] &&
+          view.input.lastClick.button == event.button) {
           if (view.input.lastClick.type == "singleClick")
               type = "doubleClick";
           else if (view.input.lastClick.type == "doubleClick")
               type = "tripleClick";
       }
-      view.input.lastClick = { time: now, x: event.clientX, y: event.clientY, type };
+      view.input.lastClick = { time: now, x: event.clientX, y: event.clientY, type, button: event.button };
       let pos = view.posAtCoords(eventCoords(event));
       if (!pos)
           return;
@@ -10301,10 +10302,10 @@
       view.domObserver.forceFlush();
       clearComposition(view);
       if (restarting || view.docView && view.docView.dirty) {
-          let sel = selectionFromDOM(view);
-          if (sel && !sel.eq(view.state.selection))
+          let sel = selectionFromDOM(view), cur = view.state.selection;
+          if (sel && !sel.eq(cur))
               view.dispatch(view.state.tr.setSelection(sel));
-          else if ((view.markCursor || restarting) && !view.state.selection.empty)
+          else if ((view.markCursor || restarting) && !cur.$from.node(cur.$from.sharedDepth(cur.to)).inlineContent)
               view.dispatch(view.state.tr.deleteSelection());
           else
               view.updateState(view.state);
@@ -14068,7 +14069,7 @@
       toDOM() { return liDOM; },
       defining: true
   };
-  function add(obj, props) {
+  function add$1(obj, props) {
       let copy = {};
       for (let prop in obj)
           copy[prop] = obj[prop];
@@ -14092,9 +14093,9 @@
   */
   function addListNodes(nodes, itemContent, listGroup) {
       return nodes.append({
-          ordered_list: add(orderedList, { content: "list_item+", group: listGroup }),
-          bullet_list: add(bulletList, { content: "list_item+", group: listGroup }),
-          list_item: add(listItem, { content: itemContent })
+          ordered_list: add$1(orderedList, { content: "list_item+", group: listGroup }),
+          bullet_list: add$1(bulletList, { content: "list_item+", group: listGroup }),
+          list_item: add$1(listItem, { content: itemContent })
       });
   }
   /**
@@ -16694,262 +16695,431 @@
   */
   const findPrev = findCommand(true, -1);
 
-  const toolbarPlugin = new Plugin({
-    view(editorView) {
-      // Create new class to hold editor and internal state such as editorView, HTML Dom elements, commands
-      let toolbarView = new ToolbarView(toolbarButtons, editorView);
+  function crelt() {
+    var elt = arguments[0];
+    if (typeof elt == "string") elt = document.createElement(elt);
+    var i = 1, next = arguments[1];
+    if (next && typeof next == "object" && next.nodeType == null && !Array.isArray(next)) {
+      for (var name in next) if (Object.prototype.hasOwnProperty.call(next, name)) {
+        var value = next[name];
+        if (typeof value == "string") elt.setAttribute(name, value);
+        else if (value != null) elt[name] = value;
+      }
+      i++;
+    }
+    for (; i < arguments.length; i++) add(elt, arguments[i]);
+    return elt
+  }
 
-      // Put the toolbar at the top of the current editor.
-      editorView.dom.parentNode.insertBefore(toolbarView.dom, editorView.dom.parentNode.firstChild);
+  function add(elt, child) {
+    if (typeof child == "string") {
+      elt.appendChild(document.createTextNode(child));
+    } else if (child == null) ; else if (child.nodeType != null) {
+      elt.appendChild(child);
+    } else if (Array.isArray(child)) {
+      for (var i = 0; i < child.length; i++) add(elt, child[i]);
+    } else {
+      throw new RangeError("Unsupported child node: " + child)
+    }
+  }
+
+  const SVG = "http://www.w3.org/2000/svg";
+  const XLINK = "http://www.w3.org/1999/xlink";
+  const prefix$2 = "ProseMirror-icon";
+  function hashPath(path) {
+      let hash = 0;
+      for (let i = 0; i < path.length; i++)
+          hash = (((hash << 5) - hash) + path.charCodeAt(i)) | 0;
+      return hash;
+  }
+  function getIcon(root, icon) {
+      let doc = (root.nodeType == 9 ? root : root.ownerDocument) || document;
+      let node = doc.createElement("div");
+      node.className = prefix$2;
+      if (icon.path) {
+          let { path, width, height } = icon;
+          let name = "pm-icon-" + hashPath(path).toString(16);
+          if (!doc.getElementById(name))
+              buildSVG(root, name, icon);
+          let svg = node.appendChild(doc.createElementNS(SVG, "svg"));
+          svg.style.width = (width / height) + "em";
+          let use = svg.appendChild(doc.createElementNS(SVG, "use"));
+          use.setAttributeNS(XLINK, "href", /([^#]*)/.exec(doc.location.toString())[1] + "#" + name);
+      }
+      else if (icon.dom) {
+          node.appendChild(icon.dom.cloneNode(true));
+      }
+      else {
+          let { text, css } = icon;
+          node.appendChild(doc.createElement("span")).textContent = text || '';
+          if (css)
+              node.firstChild.style.cssText = css;
+      }
+      return node;
+  }
+  function buildSVG(root, name, data) {
+      let [doc, top] = root.nodeType == 9 ? [root, root.body] : [root.ownerDocument || document, root];
+      let collection = doc.getElementById(prefix$2 + "-collection");
+      if (!collection) {
+          collection = doc.createElementNS(SVG, "svg");
+          collection.id = prefix$2 + "-collection";
+          collection.style.display = "none";
+          top.insertBefore(collection, top.firstChild);
+      }
+      let sym = doc.createElementNS(SVG, "symbol");
+      sym.id = name;
+      sym.setAttribute("viewBox", "0 0 " + data.width + " " + data.height);
+      let path = sym.appendChild(doc.createElementNS(SVG, "path"));
+      path.setAttribute("d", data.path);
+      collection.appendChild(sym);
+  }
+
+  const prefix$1 = "ProseMirror-menu";
+  /**
+  An icon or label that, when clicked, executes a command.
+  */
+  class MenuItem {
+      /**
+      Create a menu item.
+      */
+      constructor(
+      /**
+      The spec used to create this item.
+      */
+      spec) {
+          this.spec = spec;
+      }
+      /**
+      Renders the icon according to its [display
+      spec](https://prosemirror.net/docs/ref/#menu.MenuItemSpec.display), and adds an event handler which
+      executes the command when the representation is clicked.
+      */
+      render(view) {
+          let spec = this.spec;
+          let dom = spec.render ? spec.render(view)
+              : spec.icon ? getIcon(view.root, spec.icon)
+                  : spec.label ? crelt("div", null, translate(view, spec.label))
+                      : null;
+          if (!dom)
+              throw new RangeError("MenuItem without icon or label property");
+          if (spec.title) {
+              const title = (typeof spec.title === "function" ? spec.title(view.state) : spec.title);
+              dom.setAttribute("title", translate(view, title));
+          }
+          if (spec.class)
+              dom.classList.add(spec.class);
+          if (spec.css)
+              dom.style.cssText += spec.css;
+          dom.addEventListener("mousedown", e => {
+              e.preventDefault();
+              if (!dom.classList.contains(prefix$1 + "-disabled"))
+                  spec.run(view.state, view.dispatch, view, e);
+          });
+          function update(state) {
+              if (spec.select) {
+                  let selected = spec.select(state);
+                  dom.style.display = selected ? "" : "none";
+                  if (!selected)
+                      return false;
+              }
+              let enabled = true;
+              if (spec.enable) {
+                  enabled = spec.enable(state) || false;
+                  setClass(dom, prefix$1 + "-disabled", !enabled);
+              }
+              if (spec.active) {
+                  let active = enabled && spec.active(state) || false;
+                  setClass(dom, prefix$1 + "-active", active);
+              }
+              return true;
+          }
+          return { dom, update };
+      }
+  }
+  function translate(view, text) {
+      return view._props.translate ? view._props.translate(text) : text;
+  }
+  let lastMenuEvent = { time: 0, node: null };
+  function markMenuEvent(e) {
+      lastMenuEvent.time = Date.now();
+      lastMenuEvent.node = e.target;
+  }
+  function isMenuEvent(wrapper) {
+      return Date.now() - 100 < lastMenuEvent.time &&
+          lastMenuEvent.node && wrapper.contains(lastMenuEvent.node);
+  }
+  /**
+  A drop-down menu, displayed as a label with a downwards-pointing
+  triangle to the right of it.
+  */
+  class Dropdown {
+      /**
+      Create a dropdown wrapping the elements.
+      */
+      constructor(content, 
+      /**
+      @internal
+      */
+      options = {}) {
+          this.options = options;
+          this.options = options || {};
+          this.content = Array.isArray(content) ? content : [content];
+      }
+      /**
+      Render the dropdown menu and sub-items.
+      */
+      render(view) {
+          let content = renderDropdownItems(this.content, view);
+          let win = view.dom.ownerDocument.defaultView || window;
+          let label = crelt("div", { class: prefix$1 + "-dropdown " + (this.options.class || ""),
+              style: this.options.css }, translate(view, this.options.label || ""));
+          if (this.options.title)
+              label.setAttribute("title", translate(view, this.options.title));
+          let wrap = crelt("div", { class: prefix$1 + "-dropdown-wrap" }, label);
+          let open = null;
+          let listeningOnClose = null;
+          let close = () => {
+              if (open && open.close()) {
+                  open = null;
+                  win.removeEventListener("mousedown", listeningOnClose);
+              }
+          };
+          label.addEventListener("mousedown", e => {
+              e.preventDefault();
+              markMenuEvent(e);
+              if (open) {
+                  close();
+              }
+              else {
+                  open = this.expand(wrap, content.dom);
+                  win.addEventListener("mousedown", listeningOnClose = () => {
+                      if (!isMenuEvent(wrap))
+                          close();
+                  });
+              }
+          });
+          function update(state) {
+              let inner = content.update(state);
+              wrap.style.display = inner ? "" : "none";
+              return inner;
+          }
+          return { dom: wrap, update };
+      }
+      /**
+      @internal
+      */
+      expand(dom, items) {
+          let menuDOM = crelt("div", { class: prefix$1 + "-dropdown-menu " + (this.options.class || "") }, items);
+          let done = false;
+          function close() {
+              if (done)
+                  return false;
+              done = true;
+              dom.removeChild(menuDOM);
+              return true;
+          }
+          dom.appendChild(menuDOM);
+          return { close, node: menuDOM };
+      }
+  }
+  function renderDropdownItems(items, view) {
+      let rendered = [], updates = [];
+      for (let i = 0; i < items.length; i++) {
+          let { dom, update } = items[i].render(view);
+          rendered.push(crelt("div", { class: prefix$1 + "-dropdown-item" }, dom));
+          updates.push(update);
+      }
+      return { dom: rendered, update: combineUpdates(updates, rendered) };
+  }
+  function combineUpdates(updates, nodes) {
+      return (state) => {
+          let something = false;
+          for (let i = 0; i < updates.length; i++) {
+              let up = updates[i](state);
+              nodes[i].style.display = up ? "" : "none";
+              if (up)
+                  something = true;
+          }
+          return something;
+      };
+  }
+  /**
+  Render the given, possibly nested, array of menu elements into a
+  document fragment, placing separators between them (and ensuring no
+  superfluous separators appear when some of the groups turn out to
+  be empty).
+  */
+  function renderGrouped(view, content) {
+      let result = document.createDocumentFragment();
+      let updates = [], separators = [];
+      for (let i = 0; i < content.length; i++) {
+          let items = content[i], localUpdates = [], localNodes = [];
+          for (let j = 0; j < items.length; j++) {
+              let { dom, update } = items[j].render(view);
+              let span = crelt("span", { class: prefix$1 + "item" }, dom);
+              result.appendChild(span);
+              localNodes.push(span);
+              localUpdates.push(update);
+          }
+          if (localUpdates.length) {
+              updates.push(combineUpdates(localUpdates, localNodes));
+              if (i < content.length - 1)
+                  separators.push(result.appendChild(separator()));
+          }
+      }
+      function update(state) {
+          let something = false, needSep = false;
+          for (let i = 0; i < updates.length; i++) {
+              let hasContent = updates[i](state);
+              if (i)
+                  separators[i - 1].style.display = needSep && hasContent ? "" : "none";
+              needSep = hasContent;
+              if (hasContent)
+                  something = true;
+          }
+          return something;
+      }
+      return { dom: result, update };
+  }
+  function separator() {
+      return crelt("span", { class: prefix$1 + "separator" });
+  }
+  /**
+  Build a menu item for changing the type of the textblock around the
+  selection to the given type. Provides `run`, `active`, and `select`
+  properties. Others must be given in `options`. `options.attrs` may
+  be an object to provide the attributes for the textblock node.
+  */
+  function blockTypeItem(nodeType, options) {
+      let command = setBlockType(nodeType, options.attrs);
+      let passedOptions = {
+          run: command,
+          enable(state) { return command(state); },
+          active(state) {
+              let { $from, to, node } = state.selection;
+              if (node)
+                  return node.hasMarkup(nodeType, options.attrs);
+              return to <= $from.end() && $from.parent.hasMarkup(nodeType, options.attrs);
+          }
+      };
+      for (let prop in options)
+          passedOptions[prop] = options[prop];
+      return new MenuItem(passedOptions);
+  }
+  // Work around classList.toggle being broken in IE11
+  function setClass(dom, cls, on) {
+      if (on)
+          dom.classList.add(cls);
+      else
+          dom.classList.remove(cls);
+  }
+
+  function toolbar(config, schema) {
+    let view = function view(editorView) {
+      let toolbarView = new ToolbarView(editorView, config, schema);
+        
+      // Put the toolbar at the top of the editorView
+      editorView.dom.parentNode.insertBefore(toolbarView.dom, editorView.dom);
 
       return toolbarView;
-    }
-  });
+    };
+    return new Plugin({view})
+  }
 
   class ToolbarView {
 
-    constructor(toolbarButtons, editorView) {
-      this.buttons = toolbarButtons;
+    constructor(editorView, config, schema) {
+      this.schema = schema;
+      this.menuItems = this.itemGroups(config);
       this.editorView = editorView;
-
-      // Create dom representation of toolbox.
-      this.addToolbar(toolbarButtons, editorView);
-    }
-
-    addToolbar(toolbarButtons, editorView) {
-      // Create div containing button
       this.dom = document.createElement("div");
       this.dom.style.display = "block";
-      toolbarButtons.forEach(({ dom }) => this.dom.appendChild(dom));
-
-      this.dom.addEventListener("mousedown", e => {
-        e.preventDefault();
-        editorView.focus();
-        toolbarButtons.forEach(({ command, dom }) => {
-          if (dom.contains(e.target))
-            command(editorView.state, editorView.dispatch, editorView);
-        });
-      });
+      let {dom, update} = renderGrouped(editorView, this.menuItems);
+      this.contentUpdate = update;
+      this.dom.appendChild(dom);
     }
 
-    update(view, lastState) {
-      console.log("update");
-      // Update if popup should show or not.
-      //this.selectionUpdate(view, lastState);
-
-      // If clicked on a toolbox button, make an update on that:
-      this.buttons.forEach(({ command, dom }) => {
-        command(this.editorView.state, null, this.editorView);
-        //dom.style.display = active ? "" : "none"
-      });
+    itemGroups(config) {
+      let itemGroups = [];
+      let {formatBar, styleMenu} = config.visibility;
+      if (formatBar) itemGroups.push(this.markItems(config));
+      if (styleMenu) itemGroups.push(this.styleItems(config));
+      return itemGroups;
     }
 
-    selectionUpdate(view, lastState) {
-      console.log("selectionUpdate");
-      let state = view.state;
-      // Don't do anything if the document/selection didn't change
-      if (lastState && lastState.doc.eq(state.doc) &&
-        lastState.selection.eq(state.selection)) return
+    /** Format Bar */
 
-      // Hide the tooltip if the selection is empty
-      //if (state.selection.empty) {
-      //	this.dom.style.display = "none"
-      //  	return
-      //}
-
-      // Otherwise, reposition it and update its content
-      this.dom.style.display = "";
-      let { from, to } = state.selection;
-      // These are in screen coordinates
-      let start = view.coordsAtPos(from), end = view.coordsAtPos(to);
-      // The box in which the tooltip is positioned, to use as base
-      let box = this.dom.offsetParent.getBoundingClientRect();
-      // Find a center-ish x position from the selection endpoints (when
-      // crossing lines, end may be more to the left)
-      let left = Math.max((start.left + end.left) / 2, start.left + 3);
-      this.dom.style.left = (left - box.left) - 425 + "px";
-      this.dom.style.bottom = (box.bottom - start.top) + "px";
-      //this.tooltip.textContent = to - from
+    /**
+     * Return the array of formatting MenuItems that should show per the config.
+     * 
+     * @param {*} config    The markupConfig that is passed-in, with boolean values in config.formatBar.
+     * @returns [MenuItem]  The array of MenuItems that show as passed in `config`
+     */
+    markItems(config) {
+      let items = [];
+      let {bold, italic, underline} = config.formatBar;
+      if (bold) items.push(this.markItem(this.schema.marks.strong, {label: 'format_bold', class: 'material-symbols-outlined'}));
+      if (italic) items.push(this.markItem(this.schema.marks.em, {label: 'format_italic', class: 'material-symbols-outlined'}));
+      if (underline) items.push(this.markItem(this.schema.marks.u, {label: 'format_underline', class: 'material-symbols-outlined'}));
+      return items;
     }
 
-    destroy() { this.dom.remove(); }
-  }
+    markItem(markType, options) {
+      let passedOptions = {
+        active: (state) => { return this.markActive(state, markType) },
+        enable: true
+      };
+      for (let prop in options) passedOptions[prop] = options[prop];
+      return this.cmdItem(toggleMark(markType), passedOptions)
+    }
 
-  function toolbarButton(text, name) {
-    let div = document.createElement("div");
-    div.className = "material-symbols-outlined";
-    div.textContent = name ?? text;
-    return div;
-  }
+    markActive(state, type) {
+      let { from, $from, to, empty } = state.selection;
+      if (empty) return type.isInSet(state.storedMarks || $from.marks())
+      else return state.doc.rangeHasMark(from, to, type)
+    }
 
-  // Buttons in toolbar. They have a command assignment (command), and DOM representation description (dom).
-  let toolbarButtons = [
-    { command: toggleMark(schema.marks.strong), dom: toolbarButton(null, "format_indent_increase") },
-    { command: toggleMark(schema.marks.em), dom: toolbarButton(null, "format_italic") },
-    { command: wrapIn(schema.nodes.blockquote), dom: toolbarButton(null, "format_bold") },
-    { command: wrapIn(schema.nodes.blockquote), dom: toolbarButton(null, "format_indent_decrease") }
-  ];
+    cmdItem(cmd, options) {
+      let passedOptions = {
+        label: options.title,
+        run: cmd
+      };
+      for (let prop in options) passedOptions[prop] = options[prop];
+      if ((!options.enable || options.enable === true) && !options.select)
+        passedOptions[options.enable ? "enable" : "select"] = state => cmd(state);
 
-  /*
-  import crel from "crel"
+      return new MenuItem(passedOptions)
+    }
 
+    /** Style DropDown */
 
-
-  import {renderGrouped} from "prosemirror-menu"
-
-  import styles from '@material-design-icons/font/outlined.css';
-
-  const prefix = "ProseMirror-menubar"
-
-  function isIOS() {
-    if (typeof navigator == "undefined") return false
-    let agent = navigator.userAgent
-    return !/Edge\/\d/.test(agent) && /AppleWebKit/.test(agent) && /Mobile\/\w+/.test(agent)
-  }
-
-  // :: (Object) → Plugin
-  // A plugin that will place a menu bar above the editor. Note that
-  // this involves wrapping the editor in an additional `<div>`.
-  //
-  //   options::-
-  //   Supports the following options:
-  //
-  //     content:: [[MenuElement]]
-  //     Provides the content of the menu, as a nested array to be
-  //     passed to `renderGrouped`.
-  //
-  //     floating:: ?bool
-  //     Determines whether the menu floats, i.e. whether it sticks to
-  //     the top of the viewport when the editor is partially scrolled
-  //     out of view.
-  export function toolbar(options) {
-    return new Plugin({
-      view(editorView) { return new ToolbarView(editorView, options) }
-    })
-  }
-
-  class ToolbarView {
-    constructor(editorView, options) {
-      this.editorView = editorView
-      this.options = options
-
-      this.wrapper = crel("div", {class: prefix + "-wrapper"})
-      this.menu = this.wrapper.appendChild(crel("div", {class: prefix}))
-      this.menu.className = prefix
-      this.spacer = null
-
-      editorView.dom.parentNode.replaceChild(this.wrapper, editorView.dom)
-      this.wrapper.appendChild(editorView.dom)
-
-      this.maxHeight = 0
-      this.widthForMaxHeight = 0
-      this.floating = false
-
-      let {dom, update} = renderGrouped(this.editorView, this.options.content)
-      this.contentUpdate = update
-      this.menu.appendChild(dom)
-      this.update()
-
-      if (options.floating && !isIOS()) {
-        this.updateFloat()
-        let potentialScrollers = getAllWrapping(this.wrapper)
-        this.scrollFunc = (e) => {
-          let root = this.editorView.root
-          if (!(root.body || root).contains(this.wrapper)) {
-              potentialScrollers.forEach(el => el.removeEventListener("scroll", this.scrollFunc))
-          } else {
-              this.updateFloat(e.target.getBoundingClientRect && e.target)
-          }
-        }
-        potentialScrollers.forEach(el => el.addEventListener('scroll', this.scrollFunc))
-      }
+    /**
+     * Return the Dropdown containing the styling MenuItems that should show per the config.
+     * 
+     * @param {*} config    The markupConfig that is passed-in, with boolean values in config.styleMenu.
+     * @returns [Dropdown]  The array of MenuItems that show as passed in `config`
+     */
+    styleItems(config) {
+      let items = [];
+      let {p, h1, h2, h3, h4, h5, h6, codeblock} = config.styleMenu;
+      if (p) items.push(blockTypeItem(this.schema.nodes.paragraph, {label: 'Normal'}));
+      if (h1) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 1}, label: 'Header 1'}));
+      if (h2) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 2}, label: 'Header 2'}));
+      if (h3) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 3}, label: 'Header 3'}));
+      if (h4) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 4}, label: 'Header 4'}));
+      if (h5) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 5}, label: 'Header 5'}));
+      if (h6) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 6}, label: 'Header 6'}));
+      if (codeblock) items.push(blockTypeItem(this.schema.nodes.code_block, {label: 'Code'}));
+      return [new Dropdown(items, {label: 'Style', title: 'Style'})]
     }
 
     update() {
-      this.contentUpdate(this.editorView.state)
-
-      if (this.floating) {
-        this.updateScrollCursor()
-      } else {
-        if (this.menu.offsetWidth != this.widthForMaxHeight) {
-          this.widthForMaxHeight = this.menu.offsetWidth
-          this.maxHeight = 0
-        }
-        if (this.menu.offsetHeight > this.maxHeight) {
-          this.maxHeight = this.menu.offsetHeight
-          this.menu.style.minHeight = this.maxHeight + "px"
-        }
-      }
+      this.contentUpdate(this.editorView.state);
     }
 
-    updateScrollCursor() {
-      let selection = this.editorView.root.getSelection()
-      if (!selection.focusNode) return
-      let rects = selection.getRangeAt(0).getClientRects()
-      let selRect = rects[selectionIsInverted(selection) ? 0 : rects.length - 1]
-      if (!selRect) return
-      let menuRect = this.menu.getBoundingClientRect()
-      if (selRect.top < menuRect.bottom && selRect.bottom > menuRect.top) {
-        let scrollable = findWrappingScrollable(this.wrapper)
-        if (scrollable) scrollable.scrollTop -= (menuRect.bottom - selRect.top)
-      }
-    }
+    destroy() { this.dom.remove(); }
 
-    updateFloat(scrollAncestor) {
-      let parent = this.wrapper, editorRect = parent.getBoundingClientRect(),
-          top = scrollAncestor ? Math.max(0, scrollAncestor.getBoundingClientRect().top) : 0
-
-      if (this.floating) {
-        if (editorRect.top >= top || editorRect.bottom < this.menu.offsetHeight + 10) {
-          this.floating = false
-          this.menu.style.position = this.menu.style.left = this.menu.style.top = this.menu.style.width = ""
-          this.menu.style.display = ""
-          this.spacer.parentNode.removeChild(this.spacer)
-          this.spacer = null
-        } else {
-          let border = (parent.offsetWidth - parent.clientWidth) / 2
-          this.menu.style.left = (editorRect.left + border) + "px"
-          this.menu.style.display = (editorRect.top > window.innerHeight ? "none" : "")
-          if (scrollAncestor) this.menu.style.top = top + "px"
-        }
-      } else {
-        if (editorRect.top < top && editorRect.bottom >= this.menu.offsetHeight + 10) {
-          this.floating = true
-          let menuRect = this.menu.getBoundingClientRect()
-          this.menu.style.left = menuRect.left + "px"
-          this.menu.style.width = menuRect.width + "px"
-          if (scrollAncestor) this.menu.style.top = top + "px"
-          this.menu.style.position = "fixed"
-          this.spacer = crel("div", {class: prefix + "-spacer", style: `height: ${menuRect.height}px`})
-          parent.insertBefore(this.spacer, this.menu)
-        }
-      }
-    }
-
-    destroy() {
-      if (this.wrapper.parentNode)
-        this.wrapper.parentNode.replaceChild(this.editorView.dom, this.wrapper)
-    }
   }
-
-  // Not precise, but close enough
-  function selectionIsInverted(selection) {
-    if (selection.anchorNode == selection.focusNode) return selection.anchorOffset > selection.focusOffset
-    return selection.anchorNode.compareDocumentPosition(selection.focusNode) == Node.DOCUMENT_POSITION_FOLLOWING
-  }
-
-  function findWrappingScrollable(node) {
-    for (let cur = node.parentNode; cur; cur = cur.parentNode)
-      if (cur.scrollHeight > cur.clientHeight) return cur
-  }
-
-  function getAllWrapping(node) {
-      let res = [window]
-      for (let cur = node.parentNode; cur; cur = cur.parentNode)
-          res.push(cur)
-      return res
-  }
-  */
 
   /**
   Input rules are regular expressions describing a piece of text
@@ -20496,20 +20666,11 @@
     return inputRules({rules})
   }
 
-  // !! This module exports helper functions for deriving a set of basic
-  // menu items, input rules, or key bindings from a schema. These
-  // values need to know about the schema for two reasons—they need
-  // access to specific instances of node and mark types, and they need
-  // to know which of the node and mark types that they know about are
-  // actually present in the schema.
-
   /**
-   * The MarkupEditor plugin, aka `muPlugin`, handles decorations that add CSS styling 
-   * we want to see reflected in the view. The node `attrs` for styling are, as needed, 
-   * also produced in the `toDOM` definition in the schema, but they do not seem 
-   * to reliably affect the view when changed during editing.
+   * The tablePlugin handles decorations that add CSS styling 
+   * for table borders.
    */
-  const muPlugin = new Plugin({
+  const tablePlugin = new Plugin({
     state: {
       init(_, {doc}) {
         return DecorationSet.create(doc, [])
@@ -20528,7 +20689,7 @@
       }
     },
     props: {
-      decorations: (state) => { return muPlugin.getState(state) }
+      decorations: (state) => { return tablePlugin.getState(state) }
     }
   });
 
@@ -20554,7 +20715,7 @@
     props: {
       decorations: (state) => { return searchModePlugin.getState(state) }
     }
-  });
+  }); 
 
   /**
    * The imagePlugin handles the interaction with the Swift side that we need for images.
@@ -20637,17 +20798,11 @@
   //     mapKeys:: ?Object
   //     Can be used to [adjust](#example-setup.buildKeymap) the key bindings created.
   //
-  //     menuBar:: ?bool
-  //     Set to false to disable the menu bar.
+  //     config:: ?Object
+  //     Configuration for the MarkupEditor, including toolbar.visibility and content.
   //
   //     history:: ?bool
   //     Set to false to disable the history plugin.
-  //
-  //     floatingMenu:: ?bool
-  //     Set to false to make the menu bar non-floating.
-  //
-  //     menuContent:: [[MenuItem]]
-  //     Can be used to override the menu content.
   function markupSetup(options) {
     let plugins = [
       buildInputRules(options.schema),
@@ -20656,22 +20811,16 @@
       dropCursor(),
       gapCursor(),
     ];
-    {
-      // TODO: toolbarPlugin needs to be replaced with something senstive to options, like a ToobarSpec
-      plugins.push(toolbarPlugin);
-        //toolbar(
-        //  {
-        //    floating: options.floatingMenu !== false,
-        //    content: options.menuContent || buildMenuItems(options.schema).fullMenu
-        //  }
-        //)
-      //)
+
+    // Only show the toolbar if options enable it
+    if (options.config?.visibility.toolbar) {
+      plugins.push(toolbar(options.config, options.schema));
     }
 
     if (options.history !== false) plugins.push(history());
 
-    // Add the MarkupEditor plugin
-    plugins.push(muPlugin);
+    // Add the plugin that handles table borders
+    plugins.push(tablePlugin);
 
     // Add the plugin that handles placeholder display for an empty document
     plugins.push(placeholderPlugin);
@@ -20686,40 +20835,14 @@
     return plugins;
   }
 
-  const muSchema = new Schema({
-    nodes: schema.spec.nodes,
-    marks: schema.spec.marks
-  });
-
-  /**
-   * Return whether to show the menubar in the web view.
-   * 
-   * The markupConfig var must be defined in an earlier script that is loaded into the 
-   * web view that markup.js (or dist/markupeditor.umd.js) is loaded into. For example:
-   * 
-   *   var markupConfig = {
-   *     menuBar: true,
-   *   }
-   * 
-   * By default, if markupConfig is not defined, returns false and the menuBar is not shown.
-   * 
-   * @returns {bool} Whether markupConfig?.menuBar is present and true.
-   */
-  function menuBar() {
-    try {
-      return markupConfig?.menuBar ?? false
-    } catch {
-      return false
-    }}
-
   window.view = new EditorView(document.querySelector("#editor"), {
     state: EditorState.create({
       // For the MarkupEditor, we can just use the editor element. 
-      // There is mo need to use a separate content element.
-      doc: DOMParser.fromSchema(muSchema).parse(document.querySelector("#editor")),
+      // There is no need to use a separate content element.
+      doc: DOMParser.fromSchema(schema).parse(document.querySelector("#editor")),
       plugins: markupSetup({
-        menuBar: menuBar(),    // Show the menubar only if markupConfig?.menuBar is defined and true
-        schema: muSchema
+        config: markupConfig,
+        schema: schema
       })
     }),
     nodeViews: {

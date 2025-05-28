@@ -1,47 +1,64 @@
-.MarkupEditor-textblock-dropdown {
+/* Specialized for MarkupEditor toolbar usage */
+.ProseMirror-menuitem .material-symbols-outlined {
+  vertical-align: bottom;
+  cursor: pointer;
+}
+
+/*
+This is a modified version of menu.css from prosemirror-menu. By using the 
+same names, we can override the defaults used there. The main changes for the 
+MarkupEditor involve sizes, with the styles being referenced in toolbar.js, 
+which is a replacement for menubar.ts in prosemirror-menu.
+*/
+
+.ProseMirror-textblock-dropdown {
   min-width: 3em;
 }
 
-.MarkupEditor-menu {
+.ProseMirror-menu {
   margin: 0 -4px;
   line-height: 1;
+  font-size: 24px;
 }
 
-.MarkupEditor-tooltip .MarkupEditor-menu {
+.ProseMirror-tooltip .ProseMirror-menu {
   width: -webkit-fit-content;
   width: fit-content;
   white-space: pre;
 }
 
-.MarkupEditor-menuitem {
+.ProseMirror-menuitem {
   margin-right: 3px;
   display: inline-block;
+  font-size: 24px;
 }
 
-.MarkupEditor-menuseparator {
+.ProseMirror-menuseparator {
   border-right: 1px solid #ddd;
   margin-right: 3px;
+  font-size: 24px;
 }
 
-.MarkupEditor-menu-dropdown, .MarkupEditor-menu-dropdown-menu {
+.ProseMirror-menu-dropdown, .ProseMirror-menu-dropdown-menu {
   font-size: 90%;
   white-space: nowrap;
 }
 
-.MarkupEditor-menu-dropdown {
+.ProseMirror-menu-dropdown {
   vertical-align: 1px;
   cursor: pointer;
   position: relative;
   padding-right: 15px;
+  font-size: 90%;
 }
 
-.MarkupEditor-menu-dropdown-wrap {
+.ProseMirror-menu-dropdown-wrap {
   padding: 1px 0 1px 4px;
   display: inline-block;
   position: relative;
 }
 
-.MarkupEditor-menu-dropdown:after {
+.ProseMirror-menu-dropdown:after {
   content: "";
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
@@ -52,7 +69,7 @@
   top: calc(50% - 2px);
 }
 
-.MarkupEditor-menu-dropdown-menu, .MarkupEditor-menu-submenu {
+.ProseMirror-menu-dropdown-menu, .ProseMirror-menu-submenu {
   position: absolute;
   background: white;
   color: #666;
@@ -60,26 +77,26 @@
   padding: 2px;
 }
 
-.MarkupEditor-menu-dropdown-menu {
+.ProseMirror-menu-dropdown-menu {
   z-index: 15;
   min-width: 6em;
 }
 
-.MarkupEditor-menu-dropdown-item {
+.ProseMirror-menu-dropdown-item {
   cursor: pointer;
   padding: 2px 8px 2px 4px;
 }
 
-.MarkupEditor-menu-dropdown-item:hover {
+.ProseMirror-menu-dropdown-item:hover {
   background: #f2f2f2;
 }
 
-.MarkupEditor-menu-submenu-wrap {
+.ProseMirror-menu-submenu-wrap {
   position: relative;
   margin-right: -4px;
 }
 
-.MarkupEditor-menu-submenu-label:after {
+.ProseMirror-menu-submenu-label:after {
   content: "";
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
@@ -90,27 +107,27 @@
   top: calc(50% - 4px);
 }
 
-.MarkupEditor-menu-submenu {
+.ProseMirror-menu-submenu {
   display: none;
   min-width: 4em;
   left: 100%;
   top: -3px;
 }
 
-.MarkupEditor-menu-active {
+.ProseMirror-menu-active {
   background: #eee;
   border-radius: 4px;
 }
 
-.MarkupEditor-menu-disabled {
+.ProseMirror-menu-disabled {
   opacity: .3;
 }
 
-.MarkupEditor-menu-submenu-wrap:hover .MarkupEditor-menu-submenu, .MarkupEditor-menu-submenu-wrap-active .MarkupEditor-menu-submenu {
+.ProseMirror-menu-submenu-wrap:hover .ProseMirror-menu-submenu, .ProseMirror-menu-submenu-wrap-active .ProseMirror-menu-submenu {
   display: block;
 }
 
-.MarkupEditor-menubar {
+.ProseMirror-menubar {
   border-top-left-radius: inherit;
   border-top-right-radius: inherit;
   position: relative;
@@ -126,7 +143,7 @@
   overflow: visible;
 }
 
-.MarkupEditor-icon {
+.ProseMirror-icon {
   display: inline-block;
   line-height: .8;
   vertical-align: -2px; /* Compensate for padding */
@@ -134,15 +151,15 @@
   cursor: pointer;
 }
 
-.MarkupEditor-menu-disabled.MarkupEditor-icon {
+.ProseMirror-menu-disabled.ProseMirror-icon {
   cursor: default;
 }
 
-.MarkupEditor-icon svg {
+.ProseMirror-icon svg {
   fill: currentColor;
   height: 1em;
 }
 
-.MarkupEditor-icon span {
+.ProseMirror-icon span {
   vertical-align: text-top;
 }

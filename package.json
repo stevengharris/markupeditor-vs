@@ -1,6 +1,6 @@
 {
     "name": "markupeditor",
-    "displayName": "MarkupEditor",
+    "displayName": "Markup Editor",
     "description": "WYSIWYG editing for HTML",
     "author": {
         "name": "Steven G. Harris",
@@ -55,16 +55,107 @@
                 ]
             }
         ],
-        "configuration": {
-            "title": "MarkupEditor",
-            "properties": {
-                "markupeditor.menubar": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Show the menubar"
+        "configuration": [
+            {
+                "title": "Visibility",
+                "properties": {
+                    "markupEditor.visibility.toolbar": {
+                        "type": "boolean",
+                        "order": 10,
+                        "default": true,
+                        "description": "Show toolbar"
+                    },
+                    "markupEditor.visibility.formatBar": {
+                        "type": "boolean",
+                        "order": 20,
+                        "default": true,
+                        "description": "Show format bar"
+                    },
+                    "markupEditor.visibility.styleMenu": {
+                        "type": "boolean",
+                        "order": 30,
+                        "default": true,
+                        "description": "Show style menu"
+                    }
+                }
+            },
+            {
+                "title": "Format Bar",
+                "properties": {
+                    "markupEditor.formatBar.bold": {
+                        "type": "boolean",
+                        "order": 10,
+                        "default": true,
+                        "description": "Show bold button"
+                    },
+                    "markupEditor.formatBar.italic": {
+                        "type": "boolean",
+                        "order": 20,
+                        "default": true,
+                        "description": "Show italic button"
+                    },
+                    "markupEditor.formatBar.underline": {
+                        "type": "boolean",
+                        "order": 30,
+                        "default": true,
+                        "description": "Show underline button"
+                    }
+                }
+            },
+            {
+                "title": "Style Menu",
+                "properties": {
+                    "markupEditor.styleMenu.p": {
+                        "type": "boolean",
+                        "order": 10,
+                        "default": true,
+                        "description": "Show P style"
+                    },
+                    "markupEditor.styleMenu.h1": {
+                        "type": "boolean",
+                        "order": 20,
+                        "default": true,
+                        "description": "Show H1 style"
+                    },
+                    "markupEditor.styleMenu.h2": {
+                        "type": "boolean",
+                        "order": 30,
+                        "default": true,
+                        "description": "Show H2 style"
+                    },
+                    "markupEditor.styleMenu.h3": {
+                        "type": "boolean",
+                        "order": 40,
+                        "default": true,
+                        "description": "Show H3 style"
+                    },
+                    "markupEditor.styleMenu.h4": {
+                        "type": "boolean",
+                        "order": 50,
+                        "default": true,
+                        "description": "Show H4 style"
+                    },
+                    "markupEditor.styleMenu.h5": {
+                        "type": "boolean",
+                        "order": 60,
+                        "default": true,
+                        "description": "Show H5 style"
+                    },
+                    "markupEditor.styleMenu.h6": {
+                        "type": "boolean",
+                        "order": 70,
+                        "default": true,
+                        "description": "Show H6 style"
+                    },
+                    "markupEditor.styleMenu.codeblock": {
+                        "type": "boolean",
+                        "order": 80,
+                        "default": true,
+                        "description": "Show code block style"
+                    }
                 }
             }
-        },
+        ],
         "menus": {
             "editor/title": [
                 {
@@ -115,7 +206,7 @@
     "dependencies": {
         "@material-design-icons/font": "^0.14.15",
         "markupeditor": "file:../markupeditor",
-        "prosemirror-state": "^1.4.3"
+        "prosemirror-state": "^1.0.0"
     },
     "devDependencies": {
         "@types/mocha": "^10.0.1",
