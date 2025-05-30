@@ -16723,297 +16723,6 @@
     }
   }
 
-  const SVG = "http://www.w3.org/2000/svg";
-  const XLINK = "http://www.w3.org/1999/xlink";
-  const prefix$2 = "ProseMirror-icon";
-  function hashPath(path) {
-      let hash = 0;
-      for (let i = 0; i < path.length; i++)
-          hash = (((hash << 5) - hash) + path.charCodeAt(i)) | 0;
-      return hash;
-  }
-  function getIcon(root, icon) {
-      let doc = (root.nodeType == 9 ? root : root.ownerDocument) || document;
-      let node = doc.createElement("div");
-      node.className = prefix$2;
-      if (icon.path) {
-          let { path, width, height } = icon;
-          let name = "pm-icon-" + hashPath(path).toString(16);
-          if (!doc.getElementById(name))
-              buildSVG(root, name, icon);
-          let svg = node.appendChild(doc.createElementNS(SVG, "svg"));
-          svg.style.width = (width / height) + "em";
-          let use = svg.appendChild(doc.createElementNS(SVG, "use"));
-          use.setAttributeNS(XLINK, "href", /([^#]*)/.exec(doc.location.toString())[1] + "#" + name);
-      }
-      else if (icon.dom) {
-          node.appendChild(icon.dom.cloneNode(true));
-      }
-      else {
-          let { text, css } = icon;
-          node.appendChild(doc.createElement("span")).textContent = text || '';
-          if (css)
-              node.firstChild.style.cssText = css;
-      }
-      return node;
-  }
-  function buildSVG(root, name, data) {
-      let [doc, top] = root.nodeType == 9 ? [root, root.body] : [root.ownerDocument || document, root];
-      let collection = doc.getElementById(prefix$2 + "-collection");
-      if (!collection) {
-          collection = doc.createElementNS(SVG, "svg");
-          collection.id = prefix$2 + "-collection";
-          collection.style.display = "none";
-          top.insertBefore(collection, top.firstChild);
-      }
-      let sym = doc.createElementNS(SVG, "symbol");
-      sym.id = name;
-      sym.setAttribute("viewBox", "0 0 " + data.width + " " + data.height);
-      let path = sym.appendChild(doc.createElementNS(SVG, "path"));
-      path.setAttribute("d", data.path);
-      collection.appendChild(sym);
-  }
-
-  const prefix$1 = "ProseMirror-menu";
-  /**
-  An icon or label that, when clicked, executes a command.
-  */
-  class MenuItem {
-      /**
-      Create a menu item.
-      */
-      constructor(
-      /**
-      The spec used to create this item.
-      */
-      spec) {
-          this.spec = spec;
-      }
-      /**
-      Renders the icon according to its [display
-      spec](https://prosemirror.net/docs/ref/#menu.MenuItemSpec.display), and adds an event handler which
-      executes the command when the representation is clicked.
-      */
-      render(view) {
-          let spec = this.spec;
-          let dom = spec.render ? spec.render(view)
-              : spec.icon ? getIcon(view.root, spec.icon)
-                  : spec.label ? crelt("div", null, translate(view, spec.label))
-                      : null;
-          if (!dom)
-              throw new RangeError("MenuItem without icon or label property");
-          if (spec.title) {
-              const title = (typeof spec.title === "function" ? spec.title(view.state) : spec.title);
-              dom.setAttribute("title", translate(view, title));
-          }
-          if (spec.class)
-              dom.classList.add(spec.class);
-          if (spec.css)
-              dom.style.cssText += spec.css;
-          dom.addEventListener("mousedown", e => {
-              e.preventDefault();
-              if (!dom.classList.contains(prefix$1 + "-disabled"))
-                  spec.run(view.state, view.dispatch, view, e);
-          });
-          function update(state) {
-              if (spec.select) {
-                  let selected = spec.select(state);
-                  dom.style.display = selected ? "" : "none";
-                  if (!selected)
-                      return false;
-              }
-              let enabled = true;
-              if (spec.enable) {
-                  enabled = spec.enable(state) || false;
-                  setClass(dom, prefix$1 + "-disabled", !enabled);
-              }
-              if (spec.active) {
-                  let active = enabled && spec.active(state) || false;
-                  setClass(dom, prefix$1 + "-active", active);
-              }
-              return true;
-          }
-          return { dom, update };
-      }
-  }
-  function translate(view, text) {
-      return view._props.translate ? view._props.translate(text) : text;
-  }
-  let lastMenuEvent = { time: 0, node: null };
-  function markMenuEvent(e) {
-      lastMenuEvent.time = Date.now();
-      lastMenuEvent.node = e.target;
-  }
-  function isMenuEvent(wrapper) {
-      return Date.now() - 100 < lastMenuEvent.time &&
-          lastMenuEvent.node && wrapper.contains(lastMenuEvent.node);
-  }
-  /**
-  A drop-down menu, displayed as a label with a downwards-pointing
-  triangle to the right of it.
-  */
-  class Dropdown {
-      /**
-      Create a dropdown wrapping the elements.
-      */
-      constructor(content, 
-      /**
-      @internal
-      */
-      options = {}) {
-          this.options = options;
-          this.options = options || {};
-          this.content = Array.isArray(content) ? content : [content];
-      }
-      /**
-      Render the dropdown menu and sub-items.
-      */
-      render(view) {
-          let content = renderDropdownItems(this.content, view);
-          let win = view.dom.ownerDocument.defaultView || window;
-          let label = crelt("div", { class: prefix$1 + "-dropdown " + (this.options.class || ""),
-              style: this.options.css }, translate(view, this.options.label || ""));
-          if (this.options.title)
-              label.setAttribute("title", translate(view, this.options.title));
-          let wrap = crelt("div", { class: prefix$1 + "-dropdown-wrap" }, label);
-          let open = null;
-          let listeningOnClose = null;
-          let close = () => {
-              if (open && open.close()) {
-                  open = null;
-                  win.removeEventListener("mousedown", listeningOnClose);
-              }
-          };
-          label.addEventListener("mousedown", e => {
-              e.preventDefault();
-              markMenuEvent(e);
-              if (open) {
-                  close();
-              }
-              else {
-                  open = this.expand(wrap, content.dom);
-                  win.addEventListener("mousedown", listeningOnClose = () => {
-                      if (!isMenuEvent(wrap))
-                          close();
-                  });
-              }
-          });
-          function update(state) {
-              let inner = content.update(state);
-              wrap.style.display = inner ? "" : "none";
-              return inner;
-          }
-          return { dom: wrap, update };
-      }
-      /**
-      @internal
-      */
-      expand(dom, items) {
-          let menuDOM = crelt("div", { class: prefix$1 + "-dropdown-menu " + (this.options.class || "") }, items);
-          let done = false;
-          function close() {
-              if (done)
-                  return false;
-              done = true;
-              dom.removeChild(menuDOM);
-              return true;
-          }
-          dom.appendChild(menuDOM);
-          return { close, node: menuDOM };
-      }
-  }
-  function renderDropdownItems(items, view) {
-      let rendered = [], updates = [];
-      for (let i = 0; i < items.length; i++) {
-          let { dom, update } = items[i].render(view);
-          rendered.push(crelt("div", { class: prefix$1 + "-dropdown-item" }, dom));
-          updates.push(update);
-      }
-      return { dom: rendered, update: combineUpdates(updates, rendered) };
-  }
-  function combineUpdates(updates, nodes) {
-      return (state) => {
-          let something = false;
-          for (let i = 0; i < updates.length; i++) {
-              let up = updates[i](state);
-              nodes[i].style.display = up ? "" : "none";
-              if (up)
-                  something = true;
-          }
-          return something;
-      };
-  }
-  /**
-  Render the given, possibly nested, array of menu elements into a
-  document fragment, placing separators between them (and ensuring no
-  superfluous separators appear when some of the groups turn out to
-  be empty).
-  */
-  function renderGrouped(view, content) {
-      let result = document.createDocumentFragment();
-      let updates = [], separators = [];
-      for (let i = 0; i < content.length; i++) {
-          let items = content[i], localUpdates = [], localNodes = [];
-          for (let j = 0; j < items.length; j++) {
-              let { dom, update } = items[j].render(view);
-              let span = crelt("span", { class: prefix$1 + "item" }, dom);
-              result.appendChild(span);
-              localNodes.push(span);
-              localUpdates.push(update);
-          }
-          if (localUpdates.length) {
-              updates.push(combineUpdates(localUpdates, localNodes));
-              if (i < content.length - 1)
-                  separators.push(result.appendChild(separator()));
-          }
-      }
-      function update(state) {
-          let something = false, needSep = false;
-          for (let i = 0; i < updates.length; i++) {
-              let hasContent = updates[i](state);
-              if (i)
-                  separators[i - 1].style.display = needSep && hasContent ? "" : "none";
-              needSep = hasContent;
-              if (hasContent)
-                  something = true;
-          }
-          return something;
-      }
-      return { dom: result, update };
-  }
-  function separator() {
-      return crelt("span", { class: prefix$1 + "separator" });
-  }
-  /**
-  Build a menu item for changing the type of the textblock around the
-  selection to the given type. Provides `run`, `active`, and `select`
-  properties. Others must be given in `options`. `options.attrs` may
-  be an object to provide the attributes for the textblock node.
-  */
-  function blockTypeItem(nodeType, options) {
-      let command = setBlockType(nodeType, options.attrs);
-      let passedOptions = {
-          run: command,
-          enable(state) { return command(state); },
-          active(state) {
-              let { $from, to, node } = state.selection;
-              if (node)
-                  return node.hasMarkup(nodeType, options.attrs);
-              return to <= $from.end() && $from.parent.hasMarkup(nodeType, options.attrs);
-          }
-      };
-      for (let prop in options)
-          passedOptions[prop] = options[prop];
-      return new MenuItem(passedOptions);
-  }
-  // Work around classList.toggle being broken in IE11
-  function setClass(dom, cls, on) {
-      if (on)
-          dom.classList.add(cls);
-      else
-          dom.classList.remove(cls);
-  }
-
   /*
    Edit only from within MarkupEditor/rollup/src. After running "npm run build",
    the rollup/dist/markupmirror.umd.js is copied into MarkupEditor/Resources/markup.js.
@@ -18757,10 +18466,10 @@
    * 
    * @param {String}  listType     The kind of list we want the list item to be in if we are turning it on or changing it.
    */
-  function toggleListItem(listType) {
+  function toggleListItem$1(listType) {
       const targetListType = nodeTypeFor(listType, view.state.schema);
       if (targetListType !== null) {
-          const command = multiWrapInList(view, targetListType);
+          const command = multiWrapInList(view.state.schema, targetListType);
           command(view.state, (transaction) => {
               const newState = view.state.apply(transaction);
               view.updateState(newState);
@@ -18849,14 +18558,14 @@
    * 
    * Adapted from code in https://discuss.prosemirror.net/t/changing-the-node-type-of-a-list/4996.
    * 
-   * @param {EditorState}     state               The EditorState against which changes are made.
+   * @param {Schema}          schema              The schema holding the list and list item node types.
    * @param {NodeType}        targetNodeType      One of state.schema.nodes.bullet_list or ordered_list to change selection to.
    * @param {Attrs | null}    attrs               Attributes of the new list items.
    * @returns {Command}                           A command to wrap the selection in a list.
    */
-  function multiWrapInList(view, targetNodeType, attrs) {
-      const listTypes = [view.state.schema.nodes.bullet_list, view.state.schema.nodes.ordered_list];
-      const targetListItemType = view.state.schema.nodes.list_item;
+  function multiWrapInList(schema, targetNodeType, attrs) {
+      const listTypes = [schema.nodes.bullet_list, schema.nodes.ordered_list];
+      const targetListItemType = schema.nodes.list_item;
       const listItemTypes = [targetListItemType];
 
       const commandAdapter = (state, dispatch) => {
@@ -20151,6 +19860,414 @@
       return node && (node.nodeName === 'A');
   }
 
+  /**
+   * Adapted, expanded, and copied-from prosemirror-menu under MIT license.
+   */
+
+
+  const prefix$1 = "ProseMirror-menu";
+
+  /**
+  An icon or label that, when clicked, executes a command.
+  */
+  class MenuItem {
+      /**
+       * Create a menu item.
+       * 
+       * @param {*} spec The spec used to create this item.
+      */
+      constructor(spec) {
+          this.spec = spec;
+      }
+
+      /**
+      Renders the icon according to its [display
+      spec](https://prosemirror.net/docs/ref/#menu.MenuItemSpec.display), and adds an event handler which
+      executes the command when the representation is clicked.
+      */
+      render(view) {
+          let spec = this.spec;
+          let dom = spec.render ? spec.render(view)
+              : spec.icon ? getIcon(view.root, spec.icon)
+                  : spec.label ? crelt("div", null, translate(view, spec.label))
+                      : null;
+          if (!dom)
+              throw new RangeError("MenuItem without icon or label property");
+          if (spec.title) {
+              const title = (typeof spec.title === "function" ? spec.title(view.state) : spec.title);
+              dom.setAttribute("title", translate(view, title));
+          }
+          if (spec.class)
+              dom.classList.add(spec.class);
+          if (spec.css)
+              dom.style.cssText += spec.css;
+          dom.addEventListener("mousedown", e => {
+              e.preventDefault();
+              if (!dom.classList.contains(prefix$1 + "-disabled"))
+                  spec.run(view.state, view.dispatch, view, e);
+          });
+          function update(state) {
+              if (spec.select) {
+                  let selected = spec.select(state);
+                  dom.style.display = selected ? "" : "none";
+                  if (!selected)
+                      return false;
+              }
+              let enabled = true;
+              if (spec.enable) {
+                  enabled = spec.enable(state) || false;
+                  setClass(dom, prefix$1 + "-disabled", !enabled);
+              }
+              if (spec.active) {
+                  let active = enabled && spec.active(state) || false;
+                  setClass(dom, prefix$1 + "-active", active);
+              }
+              return true;
+          }
+          return { dom, update };
+      }
+  }
+
+  function translate(view, text) {
+      return view._props.translate ? view._props.translate(text) : text;
+  }
+
+  // Work around classList.toggle being broken in IE11
+  function setClass(dom, cls, on) {
+      if (on)
+          dom.classList.add(cls);
+      else
+          dom.classList.remove(cls);
+  }
+
+  /**
+   * Build an array of MenuItems and nested MenuItems that comprise the content of the Toolbar 
+   * based on the `config` and `schema`.
+   * 
+   * @param {Object} config The configuration of the menu
+   * @param {Schema} schema The schema that holds node and mark types
+   * @returns [MenuItem]    The array of MenuItems or nested MenuItems used by `renderGrouped`.
+   */
+  function buildMenuItems(config, schema) {
+    let itemGroups = [];
+    let { formatBar, styleMenu, styleBar } = config.visibility;
+    if (styleMenu) itemGroups.push(styleMenuItems(config, schema));
+    if (styleBar) itemGroups.push(styleBarItems(config, schema));
+    if (formatBar) itemGroups.push(formatItems(config, schema));
+    return itemGroups;
+  }
+
+  // Style Bar (List, Indent, Outdent)
+
+  function styleBarItems(config, schema) {
+    let items = [];
+    let { number, bullet, indent, outdent } = config.styleBar;
+    if (number) items.push(toggleListItem(schema, schema.nodes.ordered_list, { label: 'format_list_numbered', class: 'material-symbols-outlined' }));
+    if (bullet) items.push(toggleListItem(schema, schema.nodes.bullet_list, { label: 'format_list_bulleted', class: 'material-symbols-outlined' }));
+    if (indent) items.push(indentItem(schema.nodes.blockquote, { label: 'format_indent_increase', class: 'material-symbols-outlined' }));
+    if (outdent) items.push(outdentItem({ label: 'format_indent_decrease', class: 'material-symbols-outlined' }));
+    return items;
+  }
+
+  function toggleListItem(schema, nodeType, options) {
+    let passedOptions = {
+      active: (state) => { return listActive(state, nodeType) },
+      enable: true
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    return cmdItem(multiWrapInList(schema, nodeType), passedOptions)
+  }
+
+  function listActive(state, nodeType) {
+    let listType = getListType(state);
+    return listType === listTypeFor(nodeType, state.schema)
+  }
+
+  function indentItem(nodeType, options) {
+    let passedOptions = {
+      active: (state) => { return isIndented(state) },
+      enable: true
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    return cmdItem(wrapIn(nodeType), passedOptions)
+  }
+
+  function outdentItem(options) {
+    let passedOptions = {
+      active: (state) => { return isIndented(state) },
+      enable: true
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    return cmdItem(lift, passedOptions)
+  }
+
+  // Format Bar (B, I, U, etc)
+
+  /**
+   * Return the array of formatting MenuItems that should show per the config.
+   * 
+   * @param {*} config    The markupConfig that is passed-in, with boolean values in config.formatBar.
+   * @returns [MenuItem]  The array of MenuItems that show as passed in `config`
+   */
+  function formatItems(config, schema) {
+    let items = [];
+    let { bold, italic, underline, code, strikethrough, subscript, superscript } = config.formatBar;
+    if (bold) items.push(formatItem(schema.marks.strong, { label: 'format_bold', class: 'material-symbols-outlined' }));
+    if (italic) items.push(formatItem(schema.marks.em, { label: 'format_italic', class: 'material-symbols-outlined' }));
+    if (underline) items.push(formatItem(schema.marks.u, { label: 'format_underline', class: 'material-symbols-outlined' }));
+    if (code) items.push(formatItem(schema.marks.code, { label: 'data_object', class: 'material-symbols-outlined' }));
+    if (strikethrough) items.push(formatItem(schema.marks.s, { label: 'strikethrough_s', class: 'material-symbols-outlined' }));
+    if (subscript) items.push(formatItem(schema.marks.sub, { label: 'subscript', class: 'material-symbols-outlined' }));
+    if (superscript) items.push(formatItem(schema.marks.sup, { label: 'superscript', class: 'material-symbols-outlined' }));
+    return items;
+  }
+
+  function formatItem(markType, options) {
+    let passedOptions = {
+      active: (state) => { return markActive(state, markType) },
+      enable: true
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    return cmdItem(toggleMark(markType), passedOptions)
+  }
+
+  function markActive(state, type) {
+    let { from, $from, to, empty } = state.selection;
+    if (empty) return type.isInSet(state.storedMarks || $from.marks())
+    else return state.doc.rangeHasMark(from, to, type)
+  }
+
+  function cmdItem(cmd, options) {
+    let passedOptions = {
+      label: options.title,
+      run: cmd
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    if ((!options.enable || options.enable === true) && !options.select)
+      passedOptions[options.enable ? "enable" : "select"] = state => cmd(state);
+
+    return new MenuItem(passedOptions)
+  }
+
+  // Style DropDown (P, H1-H6, Code)
+
+  /**
+   * Return the Dropdown containing the styling MenuItems that should show per the config.
+   * 
+   * @param {*} config    The markupConfig that is passed-in, with boolean values in config.styleMenu.
+   * @returns [Dropdown]  The array of MenuItems that show as passed in `config`
+   */
+  function styleMenuItems(config, schema) {
+    let items = [];
+    let { p, h1, h2, h3, h4, h5, h6, codeblock } = config.styleMenu;
+    if (p) items.push(blockTypeItem(schema.nodes.paragraph, { label: 'Normal' }));
+    if (h1) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 1 }, label: 'Header 1' }));
+    if (h2) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 2 }, label: 'Header 2' }));
+    if (h3) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 3 }, label: 'Header 3' }));
+    if (h4) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 4 }, label: 'Header 4' }));
+    if (h5) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 5 }, label: 'Header 5' }));
+    if (h6) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 6 }, label: 'Header 6' }));
+    if (codeblock) items.push(blockTypeItem(schema.nodes.code_block, { label: 'Code' }));
+    return [new Dropdown(items, { label: 'Style', title: 'Style' })]
+  }
+
+  /**
+  Build a menu item for changing the type of the textblock around the
+  selection to the given type. Provides `run`, `active`, and `select`
+  properties. Others must be given in `options`. `options.attrs` may
+  be an object to provide the attributes for the textblock node.
+  */
+  function blockTypeItem(nodeType, options) {
+      let command = setBlockType(nodeType, options.attrs);
+      let passedOptions = {
+          run: command,
+          enable(state) { return command(state); },
+          active(state) {
+              let { $from, to, node } = state.selection;
+              if (node)
+                  return node.hasMarkup(nodeType, options.attrs);
+              return to <= $from.end() && $from.parent.hasMarkup(nodeType, options.attrs);
+          }
+      };
+      for (let prop in options)
+          passedOptions[prop] = options[prop];
+      return new MenuItem(passedOptions);
+  }
+
+  /**
+  A drop-down menu, displayed as a label with a downwards-pointing
+  triangle to the right of it.
+  */
+  class Dropdown {
+      /**
+      Create a dropdown wrapping the elements.
+      */
+      constructor(content, 
+      /**
+      @internal
+      */
+      options = {}) {
+          this.options = options;
+          this.options = options || {};
+          this.content = Array.isArray(content) ? content : [content];
+      }
+      /**
+      Render the dropdown menu and sub-items.
+      */
+      render(view) {
+          let content = renderDropdownItems(this.content, view);
+          let win = view.dom.ownerDocument.defaultView || window;
+          let label = crelt("div", { class: prefix$1 + "-dropdown " + (this.options.class || ""),
+              style: this.options.css }, translate(view, this.options.label || ""));
+          if (this.options.title)
+              label.setAttribute("title", translate(view, this.options.title));
+          let wrap = crelt("div", { class: prefix$1 + "-dropdown-wrap" }, label);
+          let open = null;
+          let listeningOnClose = null;
+          let close = () => {
+              if (open && open.close()) {
+                  open = null;
+                  win.removeEventListener("mousedown", listeningOnClose);
+              }
+          };
+          label.addEventListener("mousedown", e => {
+              e.preventDefault();
+              markMenuEvent(e);
+              if (open) {
+                  close();
+              }
+              else {
+                  open = this.expand(wrap, content.dom);
+                  win.addEventListener("mousedown", listeningOnClose = () => {
+                      if (!isMenuEvent(wrap))
+                          close();
+                  });
+              }
+          });
+          function update(state) {
+              let inner = content.update(state);
+              wrap.style.display = inner ? "" : "none";
+              return inner;
+          }
+          return { dom: wrap, update };
+      }
+      /**
+      @internal
+      */
+      expand(dom, items) {
+          let menuDOM = crelt("div", { class: prefix$1 + "-dropdown-menu " + (this.options.class || "") }, items);
+          let done = false;
+          function close() {
+              if (done)
+                  return false;
+              done = true;
+              dom.removeChild(menuDOM);
+              return true;
+          }
+          dom.appendChild(menuDOM);
+          return { close, node: menuDOM };
+      }
+  }
+
+  function renderDropdownItems(items, view) {
+      let rendered = [], updates = [];
+      for (let i = 0; i < items.length; i++) {
+          let { dom, update } = items[i].render(view);
+          rendered.push(crelt("div", { class: prefix$1 + "-dropdown-item" }, dom));
+          updates.push(update);
+      }
+      return { dom: rendered, update: combineUpdates(updates, rendered) };
+  }
+
+  /**
+  Render the given, possibly nested, array of menu elements into a
+  document fragment, placing separators between them (and ensuring no
+  superfluous separators appear when some of the groups turn out to
+  be empty).
+  */
+  function renderGrouped(view, content) {
+      let result = document.createDocumentFragment();
+      let updates = [], separators = [];
+      for (let i = 0; i < content.length; i++) {
+          let items = content[i], localUpdates = [], localNodes = [];
+          for (let j = 0; j < items.length; j++) {
+              let { dom, update } = items[j].render(view);
+              let span = crelt("span", { class: prefix$1 + "item" }, dom);
+              result.appendChild(span);
+              localNodes.push(span);
+              localUpdates.push(update);
+          }
+          if (localUpdates.length) {
+              updates.push(combineUpdates(localUpdates, localNodes));
+              if (i < content.length - 1)
+                  separators.push(result.appendChild(separator()));
+          }
+      }
+      function update(state) {
+          let something = false, needSep = false;
+          for (let i = 0; i < updates.length; i++) {
+              let hasContent = updates[i](state);
+              if (i)
+                  separators[i - 1].style.display = needSep && hasContent ? "" : "none";
+              needSep = hasContent;
+              if (hasContent)
+                  something = true;
+          }
+          return something;
+      }
+      return { dom: result, update };
+  }
+
+  function separator() {
+      return crelt("span", { class: prefix$1 + "separator" });
+  }
+
+  function combineUpdates(updates, nodes) {
+      return (state) => {
+          let something = false;
+          for (let i = 0; i < updates.length; i++) {
+              let up = updates[i](state);
+              nodes[i].style.display = up ? "" : "none";
+              if (up)
+                  something = true;
+          }
+          return something;
+      };
+  }
+
+  let lastMenuEvent = { time: 0, node: null };
+
+  function markMenuEvent(e) {
+      lastMenuEvent.time = Date.now();
+      lastMenuEvent.node = e.target;
+  }
+
+  function isMenuEvent(wrapper) {
+      return Date.now() - 100 < lastMenuEvent.time &&
+          lastMenuEvent.node && wrapper.contains(lastMenuEvent.node);
+  }
+
+  /**
+   * The ToolbarView contains the `content` that is passed to it. The content is an array (or nested arrays) of 
+   * MenuItems, which the ToolbarView renders using `renderGrouped`. The contents passed to the
+   * ToolbarView is defined in `menu.js` using `buildMenuItems` by passing the config that defines what is 
+   * visible (the toolbar itself and the subtoolbars within it), and what MenuItems are added to each 
+   * subtoolbar. Note that the ToolbarView uses a class and label to display each item, as defined in 
+   * `menu.js`. The class and labels are specific to Google's Material Design (https://fonts.google.com/icons)
+   * and the web page displaying the toolbar will need to load `material-icons-outlines.woff2`.
+   * 
+   * Right now the markupeditorjs holds its configuration in a global `markupconfig` which is referenced in 
+   * `main.js`. This object needs to be set up before a MarkupEditor web page is launched, which I'm currently 
+   * doing in a script that is loaded before markupeditor.js. You can't see that in markupeditorjs, but you 
+   * can see it in markupeditorvs, the VSCode extension, in the webview panel set up done in markupCoordinator.js.
+   * It's a bit odd that the JavaScript MarkupEditor package references something like `markupconfig` but itself
+   * never defines it. I might have to do something about that in the future, but the intent is that something 
+   * somewhere creates an actual web page that holds onto the MarkupEditor and loads all of its scripts. That 
+   * thing is what controls and defines the config. In the VSCode extension, that is done via the standard 
+   * VSCode extension settings mechanisms. In Swift, it is done in the Swift using the MarkupEditor settings.
+   */
+
+
   const prefix = "ProseMirror-menubar";
 
   function isIOS() {
@@ -20159,9 +20276,9 @@
     return !/Edge\/\d/.test(agent) && /AppleWebKit/.test(agent) && /Mobile\/\w+/.test(agent)
   }
 
-  function toolbar(config, schema) {
+  function toolbar(content) {
     let view = function view(editorView) {
-      let toolbarView = new ToolbarView(editorView, config, schema);
+      let toolbarView = new ToolbarView(editorView, content);
       return toolbarView;
     };
     return new Plugin({view})
@@ -20169,11 +20286,9 @@
 
   class ToolbarView {
 
-    constructor(editorView, config, schema) {
+    constructor(editorView, content) {
       this.editorView = editorView;
-      this.config = config;
-      this.nodes = schema.nodes;
-      this.marks = schema.marks;
+      this.content = content;
       this.spacer = null;
       this.maxHeight = 0;
       this.widthForMaxHeight = 0;
@@ -20188,12 +20303,12 @@
         editorView.dom.parentNode.replaceChild(this.wrapper, editorView.dom);
       this.wrapper.appendChild(editorView.dom);
 
-      let {dom, update} = renderGrouped(editorView, this.itemGroups(config));
-      this.contentUpdate = update; // (state) => { return true };
+      let {dom, update} = renderGrouped(editorView, content);
+      this.contentUpdate = update;
       this.menu.appendChild(dom);
       this.update();
 
-      if (!isIOS()) { // The toolbar floats at the top
+      if (!isIOS()) { // The toolbar always stays at the top
         this.updateFloat();
         let potentialScrollers = getAllWrapping(this.wrapper);
         this.scrollHandler = (e) => {
@@ -20208,132 +20323,9 @@
 
     }
 
-    itemGroups(config) {
-      let itemGroups = [];
-      let {formatBar, styleMenu, styleBar} = config.visibility;
-      if (styleMenu) itemGroups.push(this.styleMenuItems(config));
-      if (styleBar) itemGroups.push(this.styleBarItems(config));
-      if (formatBar) itemGroups.push(this.formatItems(config));
-      return itemGroups;
-    }
-
-    /** Style Bar (List, Indent, Outdent) */
-
-    styleBarItems(config) {
-      let items = [];
-      let {number, bullet, indent, outdent} = config.styleBar;
-      if (number) items.push(this.toggleListItem(this.nodes.ordered_list, {label: 'format_list_numbered', class: 'material-symbols-outlined'}));
-      if (bullet) items.push(this.toggleListItem(this.nodes.bullet_list, {label: 'format_list_bulleted', class: 'material-symbols-outlined'}));
-      if (indent) items.push(this.indentItem(this.nodes.blockquote, {label: 'format_indent_increase', class: 'material-symbols-outlined'}));
-      if (outdent) items.push(this.outdentItem({label: 'format_indent_decrease', class: 'material-symbols-outlined'}));
-      return items;
-    }
-
-    toggleListItem(nodeType, options) {
-      let passedOptions = {
-        active: (state) => { return this.listActive(state, nodeType) },
-        enable: true
-      };
-      for (let prop in options) passedOptions[prop] = options[prop];
-      return this.cmdItem(multiWrapInList(this.editorView, nodeType), passedOptions)
-    }
-
-    listActive(state, nodeType) {
-      let listType = getListType(state);
-      return listType === listTypeFor(nodeType, state.schema)
-    }
-
-    indentItem(nodeType, options) {
-      let passedOptions = {
-        active: (state) => { return isIndented(state) },
-        enable: true
-      };
-      for (let prop in options) passedOptions[prop] = options[prop];
-      return this.cmdItem(wrapIn(nodeType), passedOptions)
-    }
-
-    outdentItem(options) {
-      let passedOptions = {
-        active: (state) => { return isIndented(state) },
-        enable: true
-      };
-      for (let prop in options) passedOptions[prop] = options[prop];
-      return this.cmdItem(lift, passedOptions)
-    }
-
-    /** Format Bar */
-
-    /**
-     * Return the array of formatting MenuItems that should show per the config.
-     * 
-     * @param {*} config    The markupConfig that is passed-in, with boolean values in config.formatBar.
-     * @returns [MenuItem]  The array of MenuItems that show as passed in `config`
-     */
-    formatItems(config) {
-      let items = [];
-      let {bold, italic, underline, code, strikethrough, subscript, superscript} = config.formatBar;
-      if (bold) items.push(this.formatItem(this.marks.strong, {label: 'format_bold', class: 'material-symbols-outlined'}));
-      if (italic) items.push(this.formatItem(this.marks.em, {label: 'format_italic', class: 'material-symbols-outlined'}));
-      if (underline) items.push(this.formatItem(this.marks.u, {label: 'format_underline', class: 'material-symbols-outlined'}));
-      if (code) items.push(this.formatItem(this.marks.code, {label: 'data_object', class: 'material-symbols-outlined'}));
-      if (strikethrough) items.push(this.formatItem(this.marks.s, {label: 'strikethrough_s', class: 'material-symbols-outlined'}));
-      if (subscript) items.push(this.formatItem(this.marks.sub, {label: 'subscript', class: 'material-symbols-outlined'}));
-      if (superscript) items.push(this.formatItem(this.marks.sup, {label: 'superscript', class: 'material-symbols-outlined'}));
-      return items;
-    }
-
-    formatItem(markType, options) {
-      let passedOptions = {
-        active: (state) => { return this.markActive(state, markType) },
-        enable: true
-      };
-      for (let prop in options) passedOptions[prop] = options[prop];
-      return this.cmdItem(toggleMark(markType), passedOptions)
-    }
-
-    markActive(state, type) {
-      let { from, $from, to, empty } = state.selection;
-      if (empty) return type.isInSet(state.storedMarks || $from.marks())
-      else return state.doc.rangeHasMark(from, to, type)
-    }
-
-    cmdItem(cmd, options) {
-      let passedOptions = {
-        label: options.title,
-        run: cmd
-      };
-      for (let prop in options) passedOptions[prop] = options[prop];
-      if ((!options.enable || options.enable === true) && !options.select)
-        passedOptions[options.enable ? "enable" : "select"] = state => cmd(state);
-
-      return new MenuItem(passedOptions)
-    }
-
-    /** Style DropDown */
-
-    /**
-     * Return the Dropdown containing the styling MenuItems that should show per the config.
-     * 
-     * @param {*} config    The markupConfig that is passed-in, with boolean values in config.styleMenu.
-     * @returns [Dropdown]  The array of MenuItems that show as passed in `config`
-     */
-    styleMenuItems(config) {
-      let items = [];
-      let {p, h1, h2, h3, h4, h5, h6, codeblock} = config.styleMenu;
-      if (p) items.push(blockTypeItem(this.nodes.paragraph, {label: 'Normal'}));
-      if (h1) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 1}, label: 'Header 1'}));
-      if (h2) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 2}, label: 'Header 2'}));
-      if (h3) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 3}, label: 'Header 3'}));
-      if (h4) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 4}, label: 'Header 4'}));
-      if (h5) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 5}, label: 'Header 5'}));
-      if (h6) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 6}, label: 'Header 6'}));
-      if (codeblock) items.push(blockTypeItem(this.nodes.code_block, {label: 'Code'}));
-      return [new Dropdown(items, {label: 'Style', title: 'Style'})]
-    }
-
     update() {
       if (this.editorView.root != this.root) {
-        let { dom, update } = renderGrouped(this.editorView, this.itemGroups(this.config));
+        let { dom, update } = renderGrouped(this.editorView, this.content);
         this.contentUpdate = update;
         this.menu.replaceChild(dom, this.menu.firstChild);
         this.root = this.editorView.root;
@@ -20379,8 +20371,7 @@
           this.menu.style.display = "";
           this.spacer.parentNode.removeChild(this.spacer);
           this.spacer = null;
-        }
-        else {
+        } else {
           let border = (parent.offsetWidth - parent.clientWidth) / 2;
           this.menu.style.left = (editorRect.left + border) + "px";
           this.menu.style.display = editorRect.top > (this.editorView.dom.ownerDocument.defaultView || window).innerHeight
@@ -20388,8 +20379,7 @@
           if (scrollAncestor)
             this.menu.style.top = top + "px";
         }
-      }
-      else {
+      } else {
         if (editorRect.top < top && editorRect.bottom >= this.menu.offsetHeight + 10) {
           this.floating = true;
           let menuRect = this.menu.getBoundingClientRect();
@@ -20981,7 +20971,8 @@
 
     // Only show the toolbar if options enable it
     if (options.config?.visibility.toolbar) {
-      plugins.push(toolbar(options.config, options.schema));
+      let content = buildMenuItems(options.config, options.schema);
+      plugins.push(toolbar(content));
     }
 
     if (options.history !== false) plugins.push(history());
@@ -21093,7 +21084,7 @@
   exports.toggleBold = toggleBold;
   exports.toggleCode = toggleCode;
   exports.toggleItalic = toggleItalic;
-  exports.toggleListItem = toggleListItem;
+  exports.toggleListItem = toggleListItem$1;
   exports.toggleStrike = toggleStrike;
   exports.toggleSubscript = toggleSubscript;
   exports.toggleSuperscript = toggleSuperscript;
