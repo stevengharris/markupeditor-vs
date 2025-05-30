@@ -17014,341 +17014,6 @@
           dom.classList.remove(cls);
   }
 
-  function toolbar(config, schema) {
-    let view = function view(editorView) {
-      let toolbarView = new ToolbarView(editorView, config, schema);
-        
-      // Put the toolbar at the top of the editorView
-      editorView.dom.parentNode.insertBefore(toolbarView.dom, editorView.dom);
-
-      return toolbarView;
-    };
-    return new Plugin({view})
-  }
-
-  class ToolbarView {
-
-    constructor(editorView, config, schema) {
-      this.schema = schema;
-      this.menuItems = this.itemGroups(config);
-      this.editorView = editorView;
-      this.dom = document.createElement("div");
-      this.dom.style.display = "block";
-      let {dom, update} = renderGrouped(editorView, this.menuItems);
-      this.contentUpdate = update;
-      this.dom.appendChild(dom);
-    }
-
-    itemGroups(config) {
-      let itemGroups = [];
-      let {formatBar, styleMenu} = config.visibility;
-      if (formatBar) itemGroups.push(this.markItems(config));
-      if (styleMenu) itemGroups.push(this.styleItems(config));
-      return itemGroups;
-    }
-
-    /** Format Bar */
-
-    /**
-     * Return the array of formatting MenuItems that should show per the config.
-     * 
-     * @param {*} config    The markupConfig that is passed-in, with boolean values in config.formatBar.
-     * @returns [MenuItem]  The array of MenuItems that show as passed in `config`
-     */
-    markItems(config) {
-      let items = [];
-      let {bold, italic, underline, code, strikethrough, subscript, superscript} = config.formatBar;
-      if (bold) items.push(this.markItem(this.schema.marks.strong, {label: 'format_bold', class: 'material-symbols-outlined'}));
-      if (italic) items.push(this.markItem(this.schema.marks.em, {label: 'format_italic', class: 'material-symbols-outlined'}));
-      if (underline) items.push(this.markItem(this.schema.marks.u, {label: 'format_underline', class: 'material-symbols-outlined'}));
-      if (code) items.push(this.markItem(this.schema.marks.code, {label: 'data_object', class: 'material-symbols-outlined'}));
-      if (strikethrough) items.push(this.markItem(this.schema.marks.s, {label: 'strikethrough_s', class: 'material-symbols-outlined'}));
-      if (subscript) items.push(this.markItem(this.schema.marks.sub, {label: 'subscript', class: 'material-symbols-outlined'}));
-      if (superscript) items.push(this.markItem(this.schema.marks.sup, {label: 'superscript', class: 'material-symbols-outlined'}));
-      return items;
-    }
-
-    markItem(markType, options) {
-      let passedOptions = {
-        active: (state) => { return this.markActive(state, markType) },
-        enable: true
-      };
-      for (let prop in options) passedOptions[prop] = options[prop];
-      return this.cmdItem(toggleMark(markType), passedOptions)
-    }
-
-    markActive(state, type) {
-      let { from, $from, to, empty } = state.selection;
-      if (empty) return type.isInSet(state.storedMarks || $from.marks())
-      else return state.doc.rangeHasMark(from, to, type)
-    }
-
-    cmdItem(cmd, options) {
-      let passedOptions = {
-        label: options.title,
-        run: cmd
-      };
-      for (let prop in options) passedOptions[prop] = options[prop];
-      if ((!options.enable || options.enable === true) && !options.select)
-        passedOptions[options.enable ? "enable" : "select"] = state => cmd(state);
-
-      return new MenuItem(passedOptions)
-    }
-
-    /** Style DropDown */
-
-    /**
-     * Return the Dropdown containing the styling MenuItems that should show per the config.
-     * 
-     * @param {*} config    The markupConfig that is passed-in, with boolean values in config.styleMenu.
-     * @returns [Dropdown]  The array of MenuItems that show as passed in `config`
-     */
-    styleItems(config) {
-      let items = [];
-      let {p, h1, h2, h3, h4, h5, h6, codeblock} = config.styleMenu;
-      if (p) items.push(blockTypeItem(this.schema.nodes.paragraph, {label: 'Normal'}));
-      if (h1) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 1}, label: 'Header 1'}));
-      if (h2) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 2}, label: 'Header 2'}));
-      if (h3) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 3}, label: 'Header 3'}));
-      if (h4) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 4}, label: 'Header 4'}));
-      if (h5) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 5}, label: 'Header 5'}));
-      if (h6) items.push(blockTypeItem(this.schema.nodes.heading, {attrs: {level: 6}, label: 'Header 6'}));
-      if (codeblock) items.push(blockTypeItem(this.schema.nodes.code_block, {label: 'Code'}));
-      return [new Dropdown(items, {label: 'Style', title: 'Style'})]
-    }
-
-    update() {
-      this.contentUpdate(this.editorView.state);
-    }
-
-    destroy() { this.dom.remove(); }
-
-  }
-
-  /**
-  Input rules are regular expressions describing a piece of text
-  that, when typed, causes something to happen. This might be
-  changing two dashes into an emdash, wrapping a paragraph starting
-  with `"> "` into a blockquote, or something entirely different.
-  */
-  class InputRule {
-      /**
-      Create an input rule. The rule applies when the user typed
-      something and the text directly in front of the cursor matches
-      `match`, which should end with `$`.
-      
-      The `handler` can be a string, in which case the matched text, or
-      the first matched group in the regexp, is replaced by that
-      string.
-      
-      Or a it can be a function, which will be called with the match
-      array produced by
-      [`RegExp.exec`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/exec),
-      as well as the start and end of the matched range, and which can
-      return a [transaction](https://prosemirror.net/docs/ref/#state.Transaction) that describes the
-      rule's effect, or null to indicate the input was not handled.
-      */
-      constructor(
-      /**
-      @internal
-      */
-      match, handler, options = {}) {
-          this.match = match;
-          this.match = match;
-          this.handler = typeof handler == "string" ? stringHandler(handler) : handler;
-          this.undoable = options.undoable !== false;
-          this.inCode = options.inCode || false;
-          this.inCodeMark = options.inCodeMark !== false;
-      }
-  }
-  function stringHandler(string) {
-      return function (state, match, start, end) {
-          let insert = string;
-          if (match[1]) {
-              let offset = match[0].lastIndexOf(match[1]);
-              insert += match[0].slice(offset + match[1].length);
-              start += offset;
-              let cutOff = start - end;
-              if (cutOff > 0) {
-                  insert = match[0].slice(offset - cutOff, offset) + insert;
-                  start = end;
-              }
-          }
-          return state.tr.insertText(insert, start, end);
-      };
-  }
-  const MAX_MATCH = 500;
-  /**
-  Create an input rules plugin. When enabled, it will cause text
-  input that matches any of the given rules to trigger the rule's
-  action.
-  */
-  function inputRules({ rules }) {
-      let plugin = new Plugin({
-          state: {
-              init() { return null; },
-              apply(tr, prev) {
-                  let stored = tr.getMeta(this);
-                  if (stored)
-                      return stored;
-                  return tr.selectionSet || tr.docChanged ? null : prev;
-              }
-          },
-          props: {
-              handleTextInput(view, from, to, text) {
-                  return run(view, from, to, text, rules, plugin);
-              },
-              handleDOMEvents: {
-                  compositionend: (view) => {
-                      setTimeout(() => {
-                          let { $cursor } = view.state.selection;
-                          if ($cursor)
-                              run(view, $cursor.pos, $cursor.pos, "", rules, plugin);
-                      });
-                  }
-              }
-          },
-          isInputRules: true
-      });
-      return plugin;
-  }
-  function run(view, from, to, text, rules, plugin) {
-      if (view.composing)
-          return false;
-      let state = view.state, $from = state.doc.resolve(from);
-      let textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - MAX_MATCH), $from.parentOffset, null, "\ufffc") + text;
-      for (let i = 0; i < rules.length; i++) {
-          let rule = rules[i];
-          if (!rule.inCodeMark && $from.marks().some(m => m.type.spec.code))
-              continue;
-          if ($from.parent.type.spec.code) {
-              if (!rule.inCode)
-                  continue;
-          }
-          else if (rule.inCode === "only") {
-              continue;
-          }
-          let match = rule.match.exec(textBefore);
-          let tr = match && match[0].length >= text.length &&
-              rule.handler(state, match, from - (match[0].length - text.length), to);
-          if (!tr)
-              continue;
-          if (rule.undoable)
-              tr.setMeta(plugin, { transform: tr, from, to, text });
-          view.dispatch(tr);
-          return true;
-      }
-      return false;
-  }
-  /**
-  This is a command that will undo an input rule, if applying such a
-  rule was the last thing that the user did.
-  */
-  const undoInputRule = (state, dispatch) => {
-      let plugins = state.plugins;
-      for (let i = 0; i < plugins.length; i++) {
-          let plugin = plugins[i], undoable;
-          if (plugin.spec.isInputRules && (undoable = plugin.getState(state))) {
-              if (dispatch) {
-                  let tr = state.tr, toUndo = undoable.transform;
-                  for (let j = toUndo.steps.length - 1; j >= 0; j--)
-                      tr.step(toUndo.steps[j].invert(toUndo.docs[j]));
-                  if (undoable.text) {
-                      let marks = tr.doc.resolve(undoable.from).marks();
-                      tr.replaceWith(undoable.from, undoable.to, state.schema.text(undoable.text, marks));
-                  }
-                  else {
-                      tr.delete(undoable.from, undoable.to);
-                  }
-                  dispatch(tr);
-              }
-              return true;
-          }
-      }
-      return false;
-  };
-
-  /**
-  Converts double dashes to an emdash.
-  */
-  const emDash = new InputRule(/--$/, "—", { inCodeMark: false });
-  /**
-  Converts three dots to an ellipsis character.
-  */
-  const ellipsis = new InputRule(/\.\.\.$/, "…", { inCodeMark: false });
-  /**
-  “Smart” opening double quotes.
-  */
-  const openDoubleQuote = new InputRule(/(?:^|[\s\{\[\(\<'"\u2018\u201C])(")$/, "“", { inCodeMark: false });
-  /**
-  “Smart” closing double quotes.
-  */
-  const closeDoubleQuote = new InputRule(/"$/, "”", { inCodeMark: false });
-  /**
-  “Smart” opening single quotes.
-  */
-  const openSingleQuote = new InputRule(/(?:^|[\s\{\[\(\<'"\u2018\u201C])(')$/, "‘", { inCodeMark: false });
-  /**
-  “Smart” closing single quotes.
-  */
-  const closeSingleQuote = new InputRule(/'$/, "’", { inCodeMark: false });
-  /**
-  Smart-quote related input rules.
-  */
-  const smartQuotes = [openDoubleQuote, closeDoubleQuote, openSingleQuote, closeSingleQuote];
-
-  /**
-  Build an input rule for automatically wrapping a textblock when a
-  given string is typed. The `regexp` argument is
-  directly passed through to the `InputRule` constructor. You'll
-  probably want the regexp to start with `^`, so that the pattern can
-  only occur at the start of a textblock.
-
-  `nodeType` is the type of node to wrap in. If it needs attributes,
-  you can either pass them directly, or pass a function that will
-  compute them from the regular expression match.
-
-  By default, if there's a node with the same type above the newly
-  wrapped node, the rule will try to [join](https://prosemirror.net/docs/ref/#transform.Transform.join) those
-  two nodes. You can pass a join predicate, which takes a regular
-  expression match and the node before the wrapped node, and can
-  return a boolean to indicate whether a join should happen.
-  */
-  function wrappingInputRule(regexp, nodeType, getAttrs = null, joinPredicate) {
-      return new InputRule(regexp, (state, match, start, end) => {
-          let attrs = getAttrs instanceof Function ? getAttrs(match) : getAttrs;
-          let tr = state.tr.delete(start, end);
-          let $start = tr.doc.resolve(start), range = $start.blockRange(), wrapping = range && findWrapping(range, nodeType, attrs);
-          if (!wrapping)
-              return null;
-          tr.wrap(range, wrapping);
-          let before = tr.doc.resolve(start - 1).nodeBefore;
-          if (before && before.type == nodeType && canJoin(tr.doc, start - 1) &&
-              (!joinPredicate || joinPredicate(match, before)))
-              tr.join(start - 1);
-          return tr;
-      });
-  }
-  /**
-  Build an input rule that changes the type of a textblock when the
-  matched text is typed into it. You'll usually want to start your
-  regexp with `^` to that it is only matched at the start of a
-  textblock. The optional `getAttrs` parameter can be used to compute
-  the new node's attributes, and works the same as in the
-  `wrappingInputRule` function.
-  */
-  function textblockTypeInputRule(regexp, nodeType, getAttrs = null) {
-      return new InputRule(regexp, (state, match, start, end) => {
-          let $start = state.doc.resolve(start);
-          let attrs = getAttrs instanceof Function ? getAttrs(match) : getAttrs;
-          if (!$start.node(-1).canReplaceWith($start.index(-1), $start.indexAfter(-1), nodeType))
-              return null;
-          return state.tr
-              .delete(start, end)
-              .setBlockType(start, start, nodeType, attrs);
-      });
-  }
-
   /*
    Edit only from within MarkupEditor/rollup/src. After running "npm run build",
    the rollup/dist/markupmirror.umd.js is copied into MarkupEditor/Resources/markup.js.
@@ -19078,47 +18743,29 @@
   //MARK: Lists
 
   /**
-   * Turn the list tag off and on for selection, doing the right thing
+   * Turn the list tag on and off for the selection, doing the right thing
    * for different cases of selections.
-   * If the selection is in a list type that is different than newListTyle,
+   * 
+   * If the selection in in a list of type `listType`, then outdent the 
+   * items in the selection.
+   * 
+   * If the selection is in a list type that is different than `listType`,
    * we need to create a new list and make the selection appear in it.
    * 
-   * @param {String}  newListType     The kind of list we want the list item to be in if we are turning it on or changing it.
+   * We use a single command returned by `multiWrapInList` because the command 
+   * can be assigned to a single button in JavaScript.
+   * 
+   * @param {String}  listType     The kind of list we want the list item to be in if we are turning it on or changing it.
    */
-  function toggleListItem(newListType) {
-      if (_getListType() === newListType) {
-          _outdentListItems();
-      } else {
-          _setListType(newListType);
-      }
-  }
-  /**
-   * Set the list style at the selection to the `listType`.
-   * @param {String}  listType    The list type { 'UL' | 'OL' } we want to set.
-   */
-  function _setListType(listType) {
-      const targetListType = _nodeTypeFor(listType);
+  function toggleListItem(listType) {
+      const targetListType = nodeTypeFor(listType, view.state.schema);
       if (targetListType !== null) {
-          const command = multiWrapInList(view.state, targetListType);
+          const command = multiWrapInList(view, targetListType);
           command(view.state, (transaction) => {
               const newState = view.state.apply(transaction);
               view.updateState(newState);
               stateChanged();
           });
-      }}
-  /**
-   * Outdent all the list items in the selection.
-   */
-  function _outdentListItems() {
-      const nodeTypes = view.state.schema.nodes;
-      const command = liftListItem(nodeTypes.list_item);
-      let newState;
-      command(view.state, (transaction) => {
-          newState = view.state.apply(transaction);
-      });
-      if (newState) {
-          view.updateState(newState);
-          stateChanged();
       }}
   /**
    * Return the type of list the selection is in, else null.
@@ -19136,13 +18783,13 @@
    * 
    * @return { 'UL' | 'OL' | null }
    */
-  function _getListType() {
-      const selection = view.state.selection;
-      const ul = view.state.schema.nodes.bullet_list;
-      const ol = view.state.schema.nodes.ordered_list;
+  function getListType(state) {
+      const selection = state.selection;
+      const ul = state.schema.nodes.bullet_list;
+      const ol = state.schema.nodes.ordered_list;
       let hasUl = false;
       let hasOl = false;
-      view.state.doc.nodesBetween(selection.from, selection.to, node => {
+      state.doc.nodesBetween(selection.from, selection.to, node => {
           if (node.isBlock) {
               hasUl = hasUl || (node.type === ul);
               hasOl = hasOl || (node.type === ol);
@@ -19152,40 +18799,46 @@
       });
       // If selection contains no lists or multiple list types, return null; else return the one list type
       const hasType = hasUl ? (hasOl ? null : ul) : (hasOl ? ol : null);
-      return _listTypeFor(hasType);
+      return listTypeFor(hasType, state.schema);
+  }
+
+  function _getListType() {
+      return getListType(view.state);
   }
   /**
    * Return the NodeType corresponding to `listType`, else null.
    * @param {"UL" | "OL" | String} listType The Swift-side String corresponding to the NodeType
    * @returns {NodeType | null}
    */
-  function _nodeTypeFor(listType) {
+  function nodeTypeFor(listType, schema) {
       if (listType === 'UL') {
-          return view.state.schema.nodes.bullet_list;
+          return schema.nodes.bullet_list;
       } else if (listType === 'OL') {
-          return view.state.schema.nodes.ordered_list;
+          return schema.nodes.ordered_list;
       } else {
           return null;
       }}
+
   /**
    * Return the String corresponding to `nodeType`, else null.
    * @param {NodeType} nodeType The NodeType corresponding to the Swift-side String
    * @returns {'UL' | 'OL' | null}
    */
-  function _listTypeFor(nodeType) {
-      if (nodeType === view.state.schema.nodes.bullet_list) {
+  function listTypeFor(nodeType, schema) {
+      if (nodeType === schema.nodes.bullet_list) {
           return 'UL';
-      } else if (nodeType === view.state.schema.nodes.ordered_list) {
+      } else if (nodeType === schema.nodes.ordered_list) {
           return 'OL';
       } else {
           return null;
-      }
-  }
+      }}
   /**
-   * Return a command that performs `wrapInList`, or if `wrapInList` fails, does a wrapping across the 
+   * Return a command that performs `wrapInList` or `liftListItem` depending on whether the selection 
+   * is in the `targetNodeType` or not. In the former case, it does the `listLiftItem`, basically 
+   * unwrapping the list. If `wrapInList` or `liftListItem` fails, it does the command across the 
    * selection. This is done by finding the common list node for the selection and then recursively 
-   * replacing existing list nodes among its descendants that are not of the `targetListType`. So, the 
-   * every descendant is made into `targetListType`, but not the common list node or its siblings. Note 
+   * replacing existing list nodes among its descendants that are not of the `targetNodeType`. So, the 
+   * every descendant is made into `targetNodeType`, but not the common list node or its siblings. Note 
    * that when the selection includes a mixture of list nodes and non-list nodes (e.g., begins in a 
    * top-level <p> and ends in a list), the wrapping might be done by `wrapInList`, which doesn't follow 
    * quite the same rules in that it leaves existing sub-lists untouched. The wrapping can also just 
@@ -19195,19 +18848,20 @@
    * does avoid those methods from knowing about state or schema.
    * 
    * Adapted from code in https://discuss.prosemirror.net/t/changing-the-node-type-of-a-list/4996.
+   * 
    * @param {EditorState}     state               The EditorState against which changes are made.
-   * @param {NodeType}        targetListType      One of state.schema.nodes.bullet_list or ordered_list to change selection to.
+   * @param {NodeType}        targetNodeType      One of state.schema.nodes.bullet_list or ordered_list to change selection to.
    * @param {Attrs | null}    attrs               Attributes of the new list items.
    * @returns {Command}                           A command to wrap the selection in a list.
    */
-  function multiWrapInList(state, targetListType, attrs) {
-      const listTypes = [state.schema.nodes.bullet_list, state.schema.nodes.ordered_list];
-      const targetListItemType = state.schema.list_item;
+  function multiWrapInList(view, targetNodeType, attrs) {
+      const listTypes = [view.state.schema.nodes.bullet_list, view.state.schema.nodes.ordered_list];
+      const targetListItemType = view.state.schema.nodes.list_item;
       const listItemTypes = [targetListItemType];
-      
-      const command = wrapInList(targetListType, attrs);
 
       const commandAdapter = (state, dispatch) => {
+          const inTargetNodeType = getListType(state) === listTypeFor(targetNodeType, state.schema);
+          const command = inTargetNodeType ? liftListItem(state.schema.nodes.list_item) : wrapInList(targetNodeType, attrs);
           const result = command(state);
           if (result) return command(state, dispatch);
 
@@ -19217,7 +18871,7 @@
           if (dispatch) {
               const updatedNode = updateNode(
                   commonListNode.node,
-                  targetListType,
+                  targetNodeType,
                   targetListItemType,
                   listTypes,
                   listItemTypes
@@ -20490,6 +20144,505 @@
    */
   function _isLinkNode(node) {
       return node && (node.nodeName === 'A');
+  }
+
+  const prefix = "ProseMirror-menubar";
+
+  function isIOS() {
+    if (typeof navigator == "undefined") return false
+    let agent = navigator.userAgent;
+    return !/Edge\/\d/.test(agent) && /AppleWebKit/.test(agent) && /Mobile\/\w+/.test(agent)
+  }
+
+  function toolbar(config, schema) {
+    let view = function view(editorView) {
+      let toolbarView = new ToolbarView(editorView, config, schema);
+      return toolbarView;
+    };
+    return new Plugin({view})
+  }
+
+  class ToolbarView {
+
+    constructor(editorView, config, schema) {
+      this.editorView = editorView;
+      this.config = config;
+      this.nodes = schema.nodes;
+      this.marks = schema.marks;
+      this.spacer = null;
+      this.maxHeight = 0;
+      this.widthForMaxHeight = 0;
+      this.floating = false;
+      this.scrollHandler = null;
+      this.root = editorView.root;
+      this.wrapper = crelt("div", {class: prefix + "-wrapper"});
+      this.menu = this.wrapper.appendChild(crelt("div", {class: prefix}));
+      this.menu.className = prefix;
+
+      if (editorView.dom.parentNode)
+        editorView.dom.parentNode.replaceChild(this.wrapper, editorView.dom);
+      this.wrapper.appendChild(editorView.dom);
+
+      let {dom, update} = renderGrouped(editorView, this.itemGroups(config));
+      this.contentUpdate = update; // (state) => { return true };
+      this.menu.appendChild(dom);
+      this.update();
+
+      if (!isIOS()) { // The toolbar floats at the top
+        this.updateFloat();
+        let potentialScrollers = getAllWrapping(this.wrapper);
+        this.scrollHandler = (e) => {
+          let root = this.editorView.root;
+          if (!(root.body || root).contains(this.wrapper))
+            potentialScrollers.forEach(el => el.removeEventListener("scroll", this.scrollHandler));
+          else
+            this.updateFloat(e.target.getBoundingClientRect ? e.target : undefined);
+        };
+        potentialScrollers.forEach(el => el.addEventListener('scroll', this.scrollHandler));
+      }
+
+    }
+
+    itemGroups(config) {
+      let itemGroups = [];
+      let {formatBar, styleMenu, styleBar} = config.visibility;
+      if (styleMenu) itemGroups.push(this.styleMenuItems(config));
+      if (styleBar) itemGroups.push(this.styleBarItems(config));
+      if (formatBar) itemGroups.push(this.formatItems(config));
+      return itemGroups;
+    }
+
+    /** Style Bar (List, Indent, Outdent) */
+
+    styleBarItems(config) {
+      let items = [];
+      let {number, bullet, indent, outdent} = config.styleBar;
+      if (number) items.push(this.toggleListItem(this.nodes.ordered_list, {label: 'format_list_numbered', class: 'material-symbols-outlined'}));
+      if (bullet) items.push(this.toggleListItem(this.nodes.bullet_list, {label: 'format_list_bulleted', class: 'material-symbols-outlined'}));
+      if (indent) items.push(this.wrapItem(this.nodes.blockquote, {label: 'format_indent_increase', class: 'material-symbols-outlined'}));
+      if (outdent) items.push(this.liftItem({label: 'format_indent_decrease', class: 'material-symbols-outlined'}));
+      return items;
+    }
+
+    toggleListItem(nodeType, options) {
+      let passedOptions = {
+        active: () => { return false },  // FIX
+        enable: true
+      };
+      for (let prop in options) passedOptions[prop] = options[prop];
+      return this.cmdItem(multiWrapInList(this.editorView, nodeType), passedOptions)
+    }
+
+    wrapItem(nodeType, options) {
+      let passedOptions = {
+        active: () => { return false },  // FIX
+        enable: true
+      };
+      for (let prop in options) passedOptions[prop] = options[prop];
+      return this.cmdItem(wrapIn(nodeType), passedOptions)
+    }
+
+    liftItem(options) {
+      let passedOptions = {
+        active: () => { return false },  // FIX
+        enable: true
+      };
+      for (let prop in options) passedOptions[prop] = options[prop];
+      return this.cmdItem(lift, passedOptions)
+    }
+
+    /** Format Bar */
+
+    /**
+     * Return the array of formatting MenuItems that should show per the config.
+     * 
+     * @param {*} config    The markupConfig that is passed-in, with boolean values in config.formatBar.
+     * @returns [MenuItem]  The array of MenuItems that show as passed in `config`
+     */
+    formatItems(config) {
+      let items = [];
+      let {bold, italic, underline, code, strikethrough, subscript, superscript} = config.formatBar;
+      if (bold) items.push(this.formatItem(this.marks.strong, {label: 'format_bold', class: 'material-symbols-outlined'}));
+      if (italic) items.push(this.formatItem(this.marks.em, {label: 'format_italic', class: 'material-symbols-outlined'}));
+      if (underline) items.push(this.formatItem(this.marks.u, {label: 'format_underline', class: 'material-symbols-outlined'}));
+      if (code) items.push(this.formatItem(this.marks.code, {label: 'data_object', class: 'material-symbols-outlined'}));
+      if (strikethrough) items.push(this.formatItem(this.marks.s, {label: 'strikethrough_s', class: 'material-symbols-outlined'}));
+      if (subscript) items.push(this.formatItem(this.marks.sub, {label: 'subscript', class: 'material-symbols-outlined'}));
+      if (superscript) items.push(this.formatItem(this.marks.sup, {label: 'superscript', class: 'material-symbols-outlined'}));
+      return items;
+    }
+
+    formatItem(markType, options) {
+      let passedOptions = {
+        active: (state) => { return this.markActive(state, markType) },
+        enable: true
+      };
+      for (let prop in options) passedOptions[prop] = options[prop];
+      return this.cmdItem(toggleMark(markType), passedOptions)
+    }
+
+    markActive(state, type) {
+      let { from, $from, to, empty } = state.selection;
+      if (empty) return type.isInSet(state.storedMarks || $from.marks())
+      else return state.doc.rangeHasMark(from, to, type)
+    }
+
+    cmdItem(cmd, options) {
+      let passedOptions = {
+        label: options.title,
+        run: cmd
+      };
+      for (let prop in options) passedOptions[prop] = options[prop];
+      if ((!options.enable || options.enable === true) && !options.select)
+        passedOptions[options.enable ? "enable" : "select"] = state => cmd(state);
+
+      return new MenuItem(passedOptions)
+    }
+
+    /** Style DropDown */
+
+    /**
+     * Return the Dropdown containing the styling MenuItems that should show per the config.
+     * 
+     * @param {*} config    The markupConfig that is passed-in, with boolean values in config.styleMenu.
+     * @returns [Dropdown]  The array of MenuItems that show as passed in `config`
+     */
+    styleMenuItems(config) {
+      let items = [];
+      let {p, h1, h2, h3, h4, h5, h6, codeblock} = config.styleMenu;
+      if (p) items.push(blockTypeItem(this.nodes.paragraph, {label: 'Normal'}));
+      if (h1) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 1}, label: 'Header 1'}));
+      if (h2) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 2}, label: 'Header 2'}));
+      if (h3) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 3}, label: 'Header 3'}));
+      if (h4) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 4}, label: 'Header 4'}));
+      if (h5) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 5}, label: 'Header 5'}));
+      if (h6) items.push(blockTypeItem(this.nodes.heading, {attrs: {level: 6}, label: 'Header 6'}));
+      if (codeblock) items.push(blockTypeItem(this.nodes.code_block, {label: 'Code'}));
+      return [new Dropdown(items, {label: 'Style', title: 'Style'})]
+    }
+
+    update() {
+      if (this.editorView.root != this.root) {
+        let { dom, update } = renderGrouped(this.editorView, this.itemGroups(this.config));
+        this.contentUpdate = update;
+        this.menu.replaceChild(dom, this.menu.firstChild);
+        this.root = this.editorView.root;
+      }
+      this.contentUpdate(this.editorView.state);
+      if (this.floating) {
+        this.updateScrollCursor();
+      }
+      else {
+        if (this.menu.offsetWidth != this.widthForMaxHeight) {
+          this.widthForMaxHeight = this.menu.offsetWidth;
+          this.maxHeight = 0;
+        }
+        if (this.menu.offsetHeight > this.maxHeight) {
+          this.maxHeight = this.menu.offsetHeight;
+          this.menu.style.minHeight = this.maxHeight + "px";
+        }
+      }
+    }
+
+    updateScrollCursor() {
+      let selection = this.editorView.root.getSelection();
+      if (!selection.focusNode)
+        return;
+      let rects = selection.getRangeAt(0).getClientRects();
+      let selRect = rects[selectionIsInverted(selection) ? 0 : rects.length - 1];
+      if (!selRect)
+        return;
+      let menuRect = this.menu.getBoundingClientRect();
+      if (selRect.top < menuRect.bottom && selRect.bottom > menuRect.top) {
+        let scrollable = findWrappingScrollable(this.wrapper);
+        if (scrollable)
+          scrollable.scrollTop -= (menuRect.bottom - selRect.top);
+      }
+    }
+
+    updateFloat(scrollAncestor) {
+      let parent = this.wrapper, editorRect = parent.getBoundingClientRect(), top = scrollAncestor ? Math.max(0, scrollAncestor.getBoundingClientRect().top) : 0;
+      if (this.floating) {
+        if (editorRect.top >= top || editorRect.bottom < this.menu.offsetHeight + 10) {
+          this.floating = false;
+          this.menu.style.position = this.menu.style.left = this.menu.style.top = this.menu.style.width = "";
+          this.menu.style.display = "";
+          this.spacer.parentNode.removeChild(this.spacer);
+          this.spacer = null;
+        }
+        else {
+          let border = (parent.offsetWidth - parent.clientWidth) / 2;
+          this.menu.style.left = (editorRect.left + border) + "px";
+          this.menu.style.display = editorRect.top > (this.editorView.dom.ownerDocument.defaultView || window).innerHeight
+            ? "none" : "";
+          if (scrollAncestor)
+            this.menu.style.top = top + "px";
+        }
+      }
+      else {
+        if (editorRect.top < top && editorRect.bottom >= this.menu.offsetHeight + 10) {
+          this.floating = true;
+          let menuRect = this.menu.getBoundingClientRect();
+          this.menu.style.left = menuRect.left + "px";
+          this.menu.style.width = menuRect.width + "px";
+          if (scrollAncestor)
+            this.menu.style.top = top + "px";
+          this.menu.style.position = "fixed";
+          this.spacer = crelt("div", { class: prefix + "-spacer", style: `height: ${menuRect.height}px` });
+          parent.insertBefore(this.spacer, this.menu);
+        }
+      }
+    }
+
+    destroy() {
+      if (this.wrapper.parentNode)
+        this.wrapper.parentNode.replaceChild(this.editorView.dom, this.wrapper);
+    }
+
+  }
+
+  // Not precise, but close enough
+  function selectionIsInverted(selection) {
+      if (selection.anchorNode == selection.focusNode)
+          return selection.anchorOffset > selection.focusOffset;
+      return selection.anchorNode.compareDocumentPosition(selection.focusNode) == Node.DOCUMENT_POSITION_FOLLOWING;
+  }
+
+  function findWrappingScrollable(node) {
+      for (let cur = node.parentNode; cur; cur = cur.parentNode)
+          if (cur.scrollHeight > cur.clientHeight)
+              return cur;
+  }
+
+  function getAllWrapping(node) {
+      let res = [node.ownerDocument.defaultView || window];
+      for (let cur = node.parentNode; cur; cur = cur.parentNode)
+          res.push(cur);
+      return res;
+  }
+
+  /**
+  Input rules are regular expressions describing a piece of text
+  that, when typed, causes something to happen. This might be
+  changing two dashes into an emdash, wrapping a paragraph starting
+  with `"> "` into a blockquote, or something entirely different.
+  */
+  class InputRule {
+      /**
+      Create an input rule. The rule applies when the user typed
+      something and the text directly in front of the cursor matches
+      `match`, which should end with `$`.
+      
+      The `handler` can be a string, in which case the matched text, or
+      the first matched group in the regexp, is replaced by that
+      string.
+      
+      Or a it can be a function, which will be called with the match
+      array produced by
+      [`RegExp.exec`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/exec),
+      as well as the start and end of the matched range, and which can
+      return a [transaction](https://prosemirror.net/docs/ref/#state.Transaction) that describes the
+      rule's effect, or null to indicate the input was not handled.
+      */
+      constructor(
+      /**
+      @internal
+      */
+      match, handler, options = {}) {
+          this.match = match;
+          this.match = match;
+          this.handler = typeof handler == "string" ? stringHandler(handler) : handler;
+          this.undoable = options.undoable !== false;
+          this.inCode = options.inCode || false;
+          this.inCodeMark = options.inCodeMark !== false;
+      }
+  }
+  function stringHandler(string) {
+      return function (state, match, start, end) {
+          let insert = string;
+          if (match[1]) {
+              let offset = match[0].lastIndexOf(match[1]);
+              insert += match[0].slice(offset + match[1].length);
+              start += offset;
+              let cutOff = start - end;
+              if (cutOff > 0) {
+                  insert = match[0].slice(offset - cutOff, offset) + insert;
+                  start = end;
+              }
+          }
+          return state.tr.insertText(insert, start, end);
+      };
+  }
+  const MAX_MATCH = 500;
+  /**
+  Create an input rules plugin. When enabled, it will cause text
+  input that matches any of the given rules to trigger the rule's
+  action.
+  */
+  function inputRules({ rules }) {
+      let plugin = new Plugin({
+          state: {
+              init() { return null; },
+              apply(tr, prev) {
+                  let stored = tr.getMeta(this);
+                  if (stored)
+                      return stored;
+                  return tr.selectionSet || tr.docChanged ? null : prev;
+              }
+          },
+          props: {
+              handleTextInput(view, from, to, text) {
+                  return run(view, from, to, text, rules, plugin);
+              },
+              handleDOMEvents: {
+                  compositionend: (view) => {
+                      setTimeout(() => {
+                          let { $cursor } = view.state.selection;
+                          if ($cursor)
+                              run(view, $cursor.pos, $cursor.pos, "", rules, plugin);
+                      });
+                  }
+              }
+          },
+          isInputRules: true
+      });
+      return plugin;
+  }
+  function run(view, from, to, text, rules, plugin) {
+      if (view.composing)
+          return false;
+      let state = view.state, $from = state.doc.resolve(from);
+      let textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - MAX_MATCH), $from.parentOffset, null, "\ufffc") + text;
+      for (let i = 0; i < rules.length; i++) {
+          let rule = rules[i];
+          if (!rule.inCodeMark && $from.marks().some(m => m.type.spec.code))
+              continue;
+          if ($from.parent.type.spec.code) {
+              if (!rule.inCode)
+                  continue;
+          }
+          else if (rule.inCode === "only") {
+              continue;
+          }
+          let match = rule.match.exec(textBefore);
+          let tr = match && match[0].length >= text.length &&
+              rule.handler(state, match, from - (match[0].length - text.length), to);
+          if (!tr)
+              continue;
+          if (rule.undoable)
+              tr.setMeta(plugin, { transform: tr, from, to, text });
+          view.dispatch(tr);
+          return true;
+      }
+      return false;
+  }
+  /**
+  This is a command that will undo an input rule, if applying such a
+  rule was the last thing that the user did.
+  */
+  const undoInputRule = (state, dispatch) => {
+      let plugins = state.plugins;
+      for (let i = 0; i < plugins.length; i++) {
+          let plugin = plugins[i], undoable;
+          if (plugin.spec.isInputRules && (undoable = plugin.getState(state))) {
+              if (dispatch) {
+                  let tr = state.tr, toUndo = undoable.transform;
+                  for (let j = toUndo.steps.length - 1; j >= 0; j--)
+                      tr.step(toUndo.steps[j].invert(toUndo.docs[j]));
+                  if (undoable.text) {
+                      let marks = tr.doc.resolve(undoable.from).marks();
+                      tr.replaceWith(undoable.from, undoable.to, state.schema.text(undoable.text, marks));
+                  }
+                  else {
+                      tr.delete(undoable.from, undoable.to);
+                  }
+                  dispatch(tr);
+              }
+              return true;
+          }
+      }
+      return false;
+  };
+
+  /**
+  Converts double dashes to an emdash.
+  */
+  const emDash = new InputRule(/--$/, "—", { inCodeMark: false });
+  /**
+  Converts three dots to an ellipsis character.
+  */
+  const ellipsis = new InputRule(/\.\.\.$/, "…", { inCodeMark: false });
+  /**
+  “Smart” opening double quotes.
+  */
+  const openDoubleQuote = new InputRule(/(?:^|[\s\{\[\(\<'"\u2018\u201C])(")$/, "“", { inCodeMark: false });
+  /**
+  “Smart” closing double quotes.
+  */
+  const closeDoubleQuote = new InputRule(/"$/, "”", { inCodeMark: false });
+  /**
+  “Smart” opening single quotes.
+  */
+  const openSingleQuote = new InputRule(/(?:^|[\s\{\[\(\<'"\u2018\u201C])(')$/, "‘", { inCodeMark: false });
+  /**
+  “Smart” closing single quotes.
+  */
+  const closeSingleQuote = new InputRule(/'$/, "’", { inCodeMark: false });
+  /**
+  Smart-quote related input rules.
+  */
+  const smartQuotes = [openDoubleQuote, closeDoubleQuote, openSingleQuote, closeSingleQuote];
+
+  /**
+  Build an input rule for automatically wrapping a textblock when a
+  given string is typed. The `regexp` argument is
+  directly passed through to the `InputRule` constructor. You'll
+  probably want the regexp to start with `^`, so that the pattern can
+  only occur at the start of a textblock.
+
+  `nodeType` is the type of node to wrap in. If it needs attributes,
+  you can either pass them directly, or pass a function that will
+  compute them from the regular expression match.
+
+  By default, if there's a node with the same type above the newly
+  wrapped node, the rule will try to [join](https://prosemirror.net/docs/ref/#transform.Transform.join) those
+  two nodes. You can pass a join predicate, which takes a regular
+  expression match and the node before the wrapped node, and can
+  return a boolean to indicate whether a join should happen.
+  */
+  function wrappingInputRule(regexp, nodeType, getAttrs = null, joinPredicate) {
+      return new InputRule(regexp, (state, match, start, end) => {
+          let attrs = getAttrs instanceof Function ? getAttrs(match) : getAttrs;
+          let tr = state.tr.delete(start, end);
+          let $start = tr.doc.resolve(start), range = $start.blockRange(), wrapping = range && findWrapping(range, nodeType, attrs);
+          if (!wrapping)
+              return null;
+          tr.wrap(range, wrapping);
+          let before = tr.doc.resolve(start - 1).nodeBefore;
+          if (before && before.type == nodeType && canJoin(tr.doc, start - 1) &&
+              (!joinPredicate || joinPredicate(match, before)))
+              tr.join(start - 1);
+          return tr;
+      });
+  }
+  /**
+  Build an input rule that changes the type of a textblock when the
+  matched text is typed into it. You'll usually want to start your
+  regexp with `^` to that it is only matched at the start of a
+  textblock. The optional `getAttrs` parameter can be used to compute
+  the new node's attributes, and works the same as in the
+  `wrappingInputRule` function.
+  */
+  function textblockTypeInputRule(regexp, nodeType, getAttrs = null) {
+      return new InputRule(regexp, (state, match, start, end) => {
+          let $start = state.doc.resolve(start);
+          let attrs = getAttrs instanceof Function ? getAttrs(match) : getAttrs;
+          if (!$start.node(-1).canReplaceWith($start.index(-1), $start.indexAfter(-1), nodeType))
+              return null;
+          return state.tr
+              .delete(start, end)
+              .setBlockType(start, start, nodeType, attrs);
+      });
   }
 
   const mac = typeof navigator != "undefined" ? /Mac/.test(navigator.platform) : false;

@@ -75,7 +75,13 @@
                         "type": "boolean",
                         "order": 30,
                         "default": true,
-                        "description": "Show style menu"
+                        "description": "Show paragraph style menu"
+                    },
+                    "markupEditor.visibility.styleBar": {
+                        "type": "boolean",
+                        "order": 40,
+                        "default": true,
+                        "description": "Show list/indent/outdent bar"
                     }
                 }
             },
@@ -176,6 +182,35 @@
                         "order": 80,
                         "default": true,
                         "description": "Show code block style"
+                    }
+                }
+            },
+            {
+                "title": "Style Bar",
+                "properties": {
+                    "markupEditor.styleBar.bullet": {
+                        "type": "boolean",
+                        "order": 10,
+                        "default": true,
+                        "description": "Show numbered list button"
+                    },
+                    "markupEditor.styleBar.number": {
+                        "type": "boolean",
+                        "order": 20,
+                        "default": true,
+                        "description": "Show bulleted list button"
+                    },
+                    "markupEditor.styleBar.indent": {
+                        "type": "boolean",
+                        "order": 30,
+                        "default": true,
+                        "description": "Show indent button"
+                    },
+                    "markupEditor.styleBar.outdent": {
+                        "type": "boolean",
+                        "order": 40,
+                        "default": true,
+                        "description": "Show outdent button"
                     }
                 }
             }
