@@ -18744,13 +18744,13 @@
 
   /**
    * Turn the list tag on and off for the selection, doing the right thing
-   * for different cases of selections.
+   * for different cases of selection.
    * 
-   * If the selection in in a list of type `listType`, then outdent the 
+   * If the selection is in a list of type `listType`, then outdent the 
    * items in the selection.
    * 
    * If the selection is in a list type that is different than `listType`,
-   * we need to create a new list and make the selection appear in it.
+   * then wrap it in a new list.
    * 
    * We use a single command returned by `multiWrapInList` because the command 
    * can be assigned to a single button in JavaScript.
@@ -19208,7 +19208,7 @@
       state['style'] = _getParagraphStyle();
       state['list'] = _getListType();
       state['li'] = state['list'] !== null;   // We are always in a li by definition for ProseMirror, right?
-      state['quote'] = _getIndented();
+      state['quote'] = isIndented();
       // Format
       const markTypes = _getMarkTypes();
       const schema = view.state.schema;
@@ -19428,16 +19428,21 @@
               break;
       }    return style;
   }
+  function isIndented(activeState) {
+      let state = activeState ? activeState : view.state;
+      return _getIndented(state); 
+  }
+
   /**
    * Return whether the selection is indented.
    *
    * @return {Boolean}   Whether the selection is in a blockquote.
    */
-  function _getIndented() {
-      const selection = view.state.selection;
+  function _getIndented(state) {
+      const selection = state.selection;
       let indented = false;
-      view.state.doc.nodesBetween(selection.from, selection.to, node => {
-          if (node.type == view.state.schema.nodes.blockquote) { 
+      state.doc.nodesBetween(selection.from, selection.to, node => {
+          if (node.type == state.schema.nodes.blockquote) { 
               indented = true;
           }        return false;   // We only need top-level nodes
       });
@@ -20219,32 +20224,37 @@
       let {number, bullet, indent, outdent} = config.styleBar;
       if (number) items.push(this.toggleListItem(this.nodes.ordered_list, {label: 'format_list_numbered', class: 'material-symbols-outlined'}));
       if (bullet) items.push(this.toggleListItem(this.nodes.bullet_list, {label: 'format_list_bulleted', class: 'material-symbols-outlined'}));
-      if (indent) items.push(this.wrapItem(this.nodes.blockquote, {label: 'format_indent_increase', class: 'material-symbols-outlined'}));
-      if (outdent) items.push(this.liftItem({label: 'format_indent_decrease', class: 'material-symbols-outlined'}));
+      if (indent) items.push(this.indentItem(this.nodes.blockquote, {label: 'format_indent_increase', class: 'material-symbols-outlined'}));
+      if (outdent) items.push(this.outdentItem({label: 'format_indent_decrease', class: 'material-symbols-outlined'}));
       return items;
     }
 
     toggleListItem(nodeType, options) {
       let passedOptions = {
-        active: () => { return false },  // FIX
+        active: (state) => { return this.listActive(state, nodeType) },
         enable: true
       };
       for (let prop in options) passedOptions[prop] = options[prop];
       return this.cmdItem(multiWrapInList(this.editorView, nodeType), passedOptions)
     }
 
-    wrapItem(nodeType, options) {
+    listActive(state, nodeType) {
+      let listType = getListType(state);
+      return listType === listTypeFor(nodeType, state.schema)
+    }
+
+    indentItem(nodeType, options) {
       let passedOptions = {
-        active: () => { return false },  // FIX
+        active: (state) => { return isIndented(state) },
         enable: true
       };
       for (let prop in options) passedOptions[prop] = options[prop];
       return this.cmdItem(wrapIn(nodeType), passedOptions)
     }
 
-    liftItem(options) {
+    outdentItem(options) {
       let passedOptions = {
-        active: () => { return false },  // FIX
+        active: (state) => { return isIndented(state) },
         enable: true
       };
       for (let prop in options) passedOptions[prop] = options[prop];
