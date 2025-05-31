@@ -18469,7 +18469,7 @@
   function toggleListItem$1(listType) {
       const targetListType = nodeTypeFor(listType, view.state.schema);
       if (targetListType !== null) {
-          const command = multiWrapInList(view.state.schema, targetListType);
+          const command = wrapInListCommand(view.state.schema, targetListType);
           command(view.state, (transaction) => {
               const newState = view.state.apply(transaction);
               view.updateState(newState);
@@ -18563,7 +18563,7 @@
    * @param {Attrs | null}    attrs               Attributes of the new list items.
    * @returns {Command}                           A command to wrap the selection in a list.
    */
-  function multiWrapInList(schema, targetNodeType, attrs) {
+  function wrapInListCommand(schema, targetNodeType, attrs) {
       const listTypes = [schema.nodes.bullet_list, schema.nodes.ordered_list];
       const targetListItemType = schema.nodes.list_item;
       const listItemTypes = [targetListItemType];
@@ -19522,6 +19522,18 @@
       }    view.focus();
       stateChanged();
   }
+  function addRowCommand(direction) {
+      const commandAdapter = (state, dispatch) => {
+          if (direction === 'BEFORE') {
+              addRowBefore(state, dispatch);
+          } else {
+              addRowAfter(state, dispatch);
+          }        return true;
+      };
+
+      return commandAdapter;
+  }
+
   /**
    * Add a column before or after the current selection, whether it's in the header or body.
    * 
@@ -19550,6 +19562,33 @@
       view.focus();
       stateChanged();
   }
+  function addColCommand(direction) {
+      const commandAdapter = (viewState, dispatch, view) => {
+          let state = view?.state ?? viewState;
+          const startSelection = new TextSelection(state.selection.$anchor, state.selection.$head);
+          let offset = 0;
+          if (direction === 'BEFORE') {
+              addColumnBefore(state, (tr) => { state = state.apply(tr); });
+              offset = 4;  // An empty cell
+          } else {
+              addColumnAfter(state, (tr) => { state = state.apply(tr); });
+          }        _mergeHeaders(state, (tr) => { state = state.apply(tr); });
+
+          if (dispatch) {
+              const $anchor = state.tr.doc.resolve(startSelection.from + offset);
+              const $head = state.tr.doc.resolve(startSelection.to + offset);
+              const selection = new TextSelection($anchor, $head);
+              const transaction = state.tr.setSelection(selection);
+              state = state.apply(transaction);
+              view.updateState(state);
+          }
+
+          return true;
+      };
+
+      return commandAdapter;
+  }
+
   /**
    * Add a header to the table at the selection.
    *
@@ -19588,6 +19627,45 @@
       view.focus();
       stateChanged();
   }
+  function addHeaderCommand(colspan = true) {
+      const commandAdapter = (viewState, dispatch, view) => {
+          let state = view?.state ?? viewState;
+          const nodeTypes = state.schema.nodes;
+          const startSelection = new TextSelection(state.selection.$anchor, state.selection.$head);
+          _selectInFirstCell(state, (tr) => { state = state.apply(tr); });
+          addRowBefore(state, (tr) => { state = state.apply(tr); });
+          _selectInFirstCell(state, (tr) => { state = state.apply(tr); });
+          toggleHeaderRow(state, (tr) => { state = state.apply(tr); });
+          if (colspan) {
+              _mergeHeaders(state, (tr) => { state = state.apply(tr); });
+          }
+          if (dispatch) {
+              // At this point, the state.selection is in the new header row we just added. By definition, 
+              // the header is placed before the original selection, so we can add its size to the 
+              // selection to restore the selection to where it was before.
+              let tableAttributes = _getTableAttributes(state);
+              let headerSize;
+              state.tr.doc.nodesBetween(tableAttributes.from, tableAttributes.to, (node) => {
+                  if (!headerSize && (node.type == nodeTypes.table_row)) {
+                      headerSize = node.nodeSize;
+                      return false;
+                  }
+                  return (node.type == nodeTypes.table);  // We only want to recurse over table
+              });
+              const $anchor = state.tr.doc.resolve(startSelection.from + headerSize);
+              const $head = state.tr.doc.resolve(startSelection.to + headerSize);
+              const selection = new TextSelection($anchor, $head);
+              const transaction = state.tr.setSelection(selection);
+              state = state.apply(transaction);
+              view.updateState(state);
+          }
+
+          return true;
+      };
+
+      return commandAdapter;
+  }
+
   /**
    * Delete the area at the table selection, either the row, col, or the entire table.
    * @param {'ROW' | 'COL' | 'TABLE'} area The area of the table to be deleted.
@@ -19607,6 +19685,24 @@
       }    view.focus();
       stateChanged();
   }
+  function deleteTableAreaCommand(area) {
+      const commandAdapter = (state, dispatch) => {
+          switch (area) {
+              case 'ROW':
+                  deleteRow(state, dispatch);
+                  break;
+              case 'COL':
+                  deleteColumn(state, dispatch);
+                  break;
+              case 'TABLE':
+                  deleteTable(state, dispatch);
+                  break;
+          }        return true;
+      };
+
+      return commandAdapter;
+  }
+
   /**
    * Set the class of the table to style it using CSS.
    * The default draws a border around everything.
@@ -19860,8 +19956,173 @@
       return node && (node.nodeName === 'A');
   }
 
+  const prefix$2 = "ProseMirror-prompt";
+
+  function openPrompt(options) {
+    let wrapper = document.body.appendChild(document.createElement("div"));
+    wrapper.className = prefix$2;
+
+    let mouseOutside = e => { if (!wrapper.contains(e.target)) close(); };
+    setTimeout(() => window.addEventListener("mousedown", mouseOutside), 50);
+    let close = () => {
+      window.removeEventListener("mousedown", mouseOutside);
+      if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+    };
+
+    let domFields = [];
+    for (let name in options.fields) domFields.push(options.fields[name].render());
+
+    let submitButton = document.createElement("button");
+    submitButton.type = "submit";
+    submitButton.className = prefix$2 + "-submit";
+    submitButton.textContent = "OK";
+    let cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = prefix$2 + "-cancel";
+    cancelButton.textContent = "Cancel";
+    cancelButton.addEventListener("click", close);
+
+    let form = wrapper.appendChild(document.createElement("form"));
+    if (options.title) form.appendChild(document.createElement("h5")).textContent = options.title;
+    domFields.forEach(field => {
+      form.appendChild(document.createElement("div")).appendChild(field);
+    });
+    let buttons = form.appendChild(document.createElement("div"));
+    buttons.className = prefix$2 + "-buttons";
+    buttons.appendChild(submitButton);
+    buttons.appendChild(document.createTextNode(" "));
+    buttons.appendChild(cancelButton);
+
+    let box = wrapper.getBoundingClientRect();
+    wrapper.style.top = ((window.innerHeight - box.height) / 2) + "px";
+    wrapper.style.left = ((window.innerWidth - box.width) / 2) + "px";
+
+    let submit = () => {
+      let params = getValues(options.fields, domFields);
+      if (params) {
+        close();
+        options.callback(params);
+      }
+    };
+
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      submit();
+    });
+
+    form.addEventListener("keydown", e => {
+      if (e.keyCode == 27) {
+        e.preventDefault();
+        close();
+      } else if (e.keyCode == 13 && !(e.ctrlKey || e.metaKey || e.shiftKey)) {
+        e.preventDefault();
+        submit();
+      } else if (e.keyCode == 9) {
+        window.setTimeout(() => {
+          if (!wrapper.contains(document.activeElement)) close();
+        }, 500);
+      }
+    });
+
+    let input = form.elements[0];
+    if (input) input.focus();
+  }
+
+  function getValues(fields, domFields) {
+    let result = Object.create(null), i = 0;
+    for (let name in fields) {
+      let field = fields[name], dom = domFields[i++];
+      let value = field.read(dom), bad = field.validate(value);
+      if (bad) {
+        reportInvalid(dom, bad);
+        return null
+      }
+      result[name] = field.clean(value);
+    }
+    return result
+  }
+
+  function reportInvalid(dom, message) {
+    // FIXME this is awful and needs a lot more work
+    let parent = dom.parentNode;
+    let msg = parent.appendChild(document.createElement("div"));
+    msg.style.left = (dom.offsetLeft + dom.offsetWidth + 2) + "px";
+    msg.style.top = (dom.offsetTop - 5) + "px";
+    msg.className = "ProseMirror-invalid";
+    msg.textContent = message;
+    setTimeout(() => parent.removeChild(msg), 1500);
+  }
+
+  // ::- The type of field that `FieldPrompt` expects to be passed to it.
+  class Field {
+    // :: (Object)
+    // Create a field with the given options. Options support by all
+    // field types are:
+    //
+    // **`value`**`: ?any`
+    //   : The starting value for the field.
+    //
+    // **`label`**`: string`
+    //   : The label for the field.
+    //
+    // **`required`**`: ?bool`
+    //   : Whether the field is required.
+    //
+    // **`validate`**`: ?(any) → ?string`
+    //   : A function to validate the given value. Should return an
+    //     error message if it is not valid.
+    constructor(options) { this.options = options; }
+
+    // render:: (state: EditorState, props: Object) → dom.Node
+    // Render the field to the DOM. Should be implemented by all subclasses.
+
+    // :: (dom.Node) → any
+    // Read the field's value from its DOM node.
+    read(dom) { return dom.value }
+
+    // :: (any) → ?string
+    // A field-type-specific validation function.
+    validateType(_value) {}
+
+    validate(value) {
+      if (!value && this.options.required)
+        return "Required field"
+      return this.validateType(value) || (this.options.validate && this.options.validate(value))
+    }
+
+    clean(value) {
+      return this.options.clean ? this.options.clean(value) : value
+    }
+  }
+
+  // ::- A field class for single-line text fields.
+  class TextField extends Field {
+    render() {
+      let input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = this.options.label;
+      input.value = this.options.value || "";
+      input.autocomplete = "off";
+      return input
+    }
+  }
+
   /**
    * Adapted, expanded, and copied-from prosemirror-menu under MIT license.
+   * 
+   * Adaptations:
+   *  - Modify buildMenuItems to use a `config` object that specifies visibility and content
+   *  - MenuItems returned from buildMenuItems use label and class options for Google material fonts
+   * 
+   * Expansions:
+   *  - Added table support using MarkupEditor capabilities for table editing
+   *  - Use MarkupEditor capabilities for list/denting across range
+   *  - Use MarkupEditor capability for toggling and changing list types
+   * 
+   * Copied:
+   *  - MenuItem
+   *  - DropDown
+   *  - Various "helper methods" returning MenuItems
    */
 
 
@@ -19926,172 +20187,6 @@
           }
           return { dom, update };
       }
-  }
-
-  function translate(view, text) {
-      return view._props.translate ? view._props.translate(text) : text;
-  }
-
-  // Work around classList.toggle being broken in IE11
-  function setClass(dom, cls, on) {
-      if (on)
-          dom.classList.add(cls);
-      else
-          dom.classList.remove(cls);
-  }
-
-  /**
-   * Build an array of MenuItems and nested MenuItems that comprise the content of the Toolbar 
-   * based on the `config` and `schema`.
-   * 
-   * @param {Object} config The configuration of the menu
-   * @param {Schema} schema The schema that holds node and mark types
-   * @returns [MenuItem]    The array of MenuItems or nested MenuItems used by `renderGrouped`.
-   */
-  function buildMenuItems(config, schema) {
-    let itemGroups = [];
-    let { formatBar, styleMenu, styleBar } = config.visibility;
-    if (styleMenu) itemGroups.push(styleMenuItems(config, schema));
-    if (styleBar) itemGroups.push(styleBarItems(config, schema));
-    if (formatBar) itemGroups.push(formatItems(config, schema));
-    return itemGroups;
-  }
-
-  // Style Bar (List, Indent, Outdent)
-
-  function styleBarItems(config, schema) {
-    let items = [];
-    let { number, bullet, indent, outdent } = config.styleBar;
-    if (number) items.push(toggleListItem(schema, schema.nodes.ordered_list, { label: 'format_list_numbered', class: 'material-symbols-outlined' }));
-    if (bullet) items.push(toggleListItem(schema, schema.nodes.bullet_list, { label: 'format_list_bulleted', class: 'material-symbols-outlined' }));
-    if (indent) items.push(indentItem(schema.nodes.blockquote, { label: 'format_indent_increase', class: 'material-symbols-outlined' }));
-    if (outdent) items.push(outdentItem({ label: 'format_indent_decrease', class: 'material-symbols-outlined' }));
-    return items;
-  }
-
-  function toggleListItem(schema, nodeType, options) {
-    let passedOptions = {
-      active: (state) => { return listActive(state, nodeType) },
-      enable: true
-    };
-    for (let prop in options) passedOptions[prop] = options[prop];
-    return cmdItem(multiWrapInList(schema, nodeType), passedOptions)
-  }
-
-  function listActive(state, nodeType) {
-    let listType = getListType(state);
-    return listType === listTypeFor(nodeType, state.schema)
-  }
-
-  function indentItem(nodeType, options) {
-    let passedOptions = {
-      active: (state) => { return isIndented(state) },
-      enable: true
-    };
-    for (let prop in options) passedOptions[prop] = options[prop];
-    return cmdItem(wrapIn(nodeType), passedOptions)
-  }
-
-  function outdentItem(options) {
-    let passedOptions = {
-      active: (state) => { return isIndented(state) },
-      enable: true
-    };
-    for (let prop in options) passedOptions[prop] = options[prop];
-    return cmdItem(lift, passedOptions)
-  }
-
-  // Format Bar (B, I, U, etc)
-
-  /**
-   * Return the array of formatting MenuItems that should show per the config.
-   * 
-   * @param {*} config    The markupConfig that is passed-in, with boolean values in config.formatBar.
-   * @returns [MenuItem]  The array of MenuItems that show as passed in `config`
-   */
-  function formatItems(config, schema) {
-    let items = [];
-    let { bold, italic, underline, code, strikethrough, subscript, superscript } = config.formatBar;
-    if (bold) items.push(formatItem(schema.marks.strong, { label: 'format_bold', class: 'material-symbols-outlined' }));
-    if (italic) items.push(formatItem(schema.marks.em, { label: 'format_italic', class: 'material-symbols-outlined' }));
-    if (underline) items.push(formatItem(schema.marks.u, { label: 'format_underline', class: 'material-symbols-outlined' }));
-    if (code) items.push(formatItem(schema.marks.code, { label: 'data_object', class: 'material-symbols-outlined' }));
-    if (strikethrough) items.push(formatItem(schema.marks.s, { label: 'strikethrough_s', class: 'material-symbols-outlined' }));
-    if (subscript) items.push(formatItem(schema.marks.sub, { label: 'subscript', class: 'material-symbols-outlined' }));
-    if (superscript) items.push(formatItem(schema.marks.sup, { label: 'superscript', class: 'material-symbols-outlined' }));
-    return items;
-  }
-
-  function formatItem(markType, options) {
-    let passedOptions = {
-      active: (state) => { return markActive(state, markType) },
-      enable: true
-    };
-    for (let prop in options) passedOptions[prop] = options[prop];
-    return cmdItem(toggleMark(markType), passedOptions)
-  }
-
-  function markActive(state, type) {
-    let { from, $from, to, empty } = state.selection;
-    if (empty) return type.isInSet(state.storedMarks || $from.marks())
-    else return state.doc.rangeHasMark(from, to, type)
-  }
-
-  function cmdItem(cmd, options) {
-    let passedOptions = {
-      label: options.title,
-      run: cmd
-    };
-    for (let prop in options) passedOptions[prop] = options[prop];
-    if ((!options.enable || options.enable === true) && !options.select)
-      passedOptions[options.enable ? "enable" : "select"] = state => cmd(state);
-
-    return new MenuItem(passedOptions)
-  }
-
-  // Style DropDown (P, H1-H6, Code)
-
-  /**
-   * Return the Dropdown containing the styling MenuItems that should show per the config.
-   * 
-   * @param {*} config    The markupConfig that is passed-in, with boolean values in config.styleMenu.
-   * @returns [Dropdown]  The array of MenuItems that show as passed in `config`
-   */
-  function styleMenuItems(config, schema) {
-    let items = [];
-    let { p, h1, h2, h3, h4, h5, h6, codeblock } = config.styleMenu;
-    if (p) items.push(blockTypeItem(schema.nodes.paragraph, { label: 'Normal' }));
-    if (h1) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 1 }, label: 'Header 1' }));
-    if (h2) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 2 }, label: 'Header 2' }));
-    if (h3) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 3 }, label: 'Header 3' }));
-    if (h4) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 4 }, label: 'Header 4' }));
-    if (h5) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 5 }, label: 'Header 5' }));
-    if (h6) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 6 }, label: 'Header 6' }));
-    if (codeblock) items.push(blockTypeItem(schema.nodes.code_block, { label: 'Code' }));
-    return [new Dropdown(items, { label: 'Style', title: 'Style' })]
-  }
-
-  /**
-  Build a menu item for changing the type of the textblock around the
-  selection to the given type. Provides `run`, `active`, and `select`
-  properties. Others must be given in `options`. `options.attrs` may
-  be an object to provide the attributes for the textblock node.
-  */
-  function blockTypeItem(nodeType, options) {
-      let command = setBlockType(nodeType, options.attrs);
-      let passedOptions = {
-          run: command,
-          enable(state) { return command(state); },
-          active(state) {
-              let { $from, to, node } = state.selection;
-              if (node)
-                  return node.hasMarkup(nodeType, options.attrs);
-              return to <= $from.end() && $from.parent.hasMarkup(nodeType, options.attrs);
-          }
-      };
-      for (let prop in options)
-          passedOptions[prop] = options[prop];
-      return new MenuItem(passedOptions);
   }
 
   /**
@@ -20169,6 +20264,100 @@
       }
   }
 
+  /**
+   * Build an array of MenuItems and nested MenuItems that comprise the content of the Toolbar 
+   * based on the `config` and `schema`.
+   * 
+   * @param {Object} config The configuration of the menu
+   * @param {Schema} schema The schema that holds node and mark types
+   * @returns [MenuItem]    The array of MenuItems or nested MenuItems used by `renderGrouped`.
+   */
+  function buildMenuItems(config, schema) {
+    let itemGroups = [];
+    let { insertBar, formatBar, styleMenu, styleBar } = config.visibility;
+    if (insertBar) itemGroups.push(insertBarItems(config, schema));
+    if (styleMenu) itemGroups.push(styleMenuItems(config, schema));
+    if (styleBar) itemGroups.push(styleBarItems(config, schema));
+    if (formatBar) itemGroups.push(formatItems(config, schema));
+    return itemGroups;
+  }
+
+  /* Utility functions */
+
+  /**
+   * 
+   * @param {EditorView}  view
+   * @param {string} text Text to be translated
+   * @returns {string}    The translated text if the view supports it
+   */
+  function translate(view, text) {
+      return view._props.translate ? view._props.translate(text) : text;
+  }
+
+  /**
+   * Add or remove a class from the element.
+   * 
+   * Apparently a workaround for classList.toggle being broken in IE11
+   * 
+   * @param {HTMLElement}  dom 
+   * @param {string}          cls The class name to add or remove
+   * @param {boolean}         on  True to add the class name to the `classList`
+   */
+  function setClass(dom, cls, on) {
+      if (on)
+          dom.classList.add(cls);
+      else
+          dom.classList.remove(cls);
+  }
+
+  /**
+   * Return whether a Node of `nodeType` can be inserted.
+   * @param {EditorState} state
+   * @param {NodeType} nodeType 
+   * @returns {boolean} Whether a Node of `nodeType` can be inserted given the `state`.
+   */
+  function canInsert(state, nodeType) {
+    let $from = state.selection.$from;
+    for (let d = $from.depth; d >= 0; d--) {
+      let index = $from.index(d);
+      if ($from.node(d).canReplaceWith(index, index, nodeType)) return true
+    }
+    return false
+  }
+
+  /**
+   * Return whether the selection in state is within a mark of type `markType`.
+   * @param {EditorState} state 
+   * @param {MarkType} type 
+   * @returns {boolean} True if the selection is within a mark of type `markType`
+   */
+  function markActive(state, type) {
+    let { from, $from, to, empty } = state.selection;
+    if (empty) return type.isInSet(state.storedMarks || $from.marks())
+    else return state.doc.rangeHasMark(from, to, type)
+  }
+
+  /**
+   * Return a MenuItem that runs the command when selected.
+   * 
+   * The label is the same as the title, and the MenuItem will be enabled/disabled based on 
+   * what `cmd(state)` returns unless otherwise specified in `options`.
+   * @param {Command}     cmd 
+   * @param {*} options   The spec for the MenuItem
+   * @returns {MenuItem}
+   */
+  function cmdItem(cmd, options) {
+    let passedOptions = {
+      label: options.title,
+      run: cmd
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    if ((!options.enable || options.enable === true) && !options.select)
+      passedOptions[options.enable ? "enable" : "select"] = state => cmd(state);
+
+    return new MenuItem(passedOptions)
+  }
+
   function renderDropdownItems(items, view) {
       let rendered = [], updates = [];
       for (let i = 0; i < items.length; i++) {
@@ -20179,12 +20368,253 @@
       return { dom: rendered, update: combineUpdates(updates, rendered) };
   }
 
+  /* Insert Bar (Link, Image, Table) */
+
   /**
-  Render the given, possibly nested, array of menu elements into a
-  document fragment, placing separators between them (and ensuring no
-  superfluous separators appear when some of the groups turn out to
-  be empty).
+   * Return the MenuItems for the style bar, as specified in `config`.
+   * @param {Object} config The config object with booleans indicating whether list and denting items are included
+   * @param {Schema} schema 
+   * @returns {[MenuItem]}  An array or MenuItems to be shown in the style bar
+   */
+  function insertBarItems(config, schema) {
+    let items = [];
+    let { link, image, table } = config.insertBar;
+    if (link) items.push(linkItem(schema.marks.link));
+    if (image) items.push(insertImageItem(schema.nodes.image));
+    if (table) items.push(tableMenuItems(config));
+    return items;
+  }
+
+  /**
+   * Return a MenuItem for image insertion
+   * @param {NodeTyoe} nodeType 
+   * @returns {MenuItem}  A MenuItem that can prompt for an image to insert
+   */
+  function insertImageItem(nodeType) {
+    return new MenuItem({
+      title: "Insert image",
+      label: 'image',
+      class: 'material-symbols-outlined',
+      enable(state) { return canInsert(state, nodeType) },
+      run(state, _, view) {
+        let {from, to} = state.selection, attrs = null;
+        if (state.selection instanceof NodeSelection && state.selection.node.type == nodeType)
+          attrs = state.selection.node.attrs;
+        openPrompt({
+          title: "Insert image",
+          fields: {
+            src: new TextField({label: "Location", required: true, value: attrs && attrs.src}),
+            title: new TextField({label: "Title", value: attrs && attrs.title}),
+            alt: new TextField({label: "Description",
+                                value: attrs ? attrs.alt : state.doc.textBetween(from, to, " ")})
+          },
+          callback(attrs) {
+            view.dispatch(view.state.tr.replaceSelectionWith(nodeType.createAndFill(attrs)));
+            view.focus();
+          }
+        });
+      }
+    })
+  }
+
+  /**
+   * Return a MenuItem for link insertion
+   * @param {MarkType} markType 
+   * @returns {MenuItem}        A MenuItem that can prompt for a link to insert
+   */
+  function linkItem(markType) {
+    return new MenuItem({
+      title: "Add or remove link",
+      label: 'link', 
+      class: 'material-symbols-outlined',
+      active(state) { return markActive(state, markType) },
+      enable(state) { return !state.selection.empty },
+      run(state, dispatch, view) {
+        if (markActive(state, markType)) {
+          toggleMark(markType)(state, dispatch);
+          return true
+        }
+        openPrompt({
+          title: "Create a link",
+          fields: {
+            href: new TextField({
+              label: "Link target",
+              required: true
+            }),
+            title: new TextField({label: "Title"})
+          },
+          callback(attrs) {
+            toggleMark(markType, attrs)(view.state, view.dispatch);
+            view.focus();
+          }
+        });
+      }
+    })
+  }
+
+  function tableMenuItems(config, schema) {
+    let items = [];
+    let { header, border } = config.tableMenu;
+    items.push(tableEditItem(addRowCommand('BEFORE'), {label: 'Add row above'}));
+    items.push(tableEditItem(addRowCommand('AFTER'), {label: 'Add row below'}));
+    items.push(tableEditItem(deleteTableAreaCommand('ROW'), {label: 'Delete row'}));
+    items.push(tableEditItem(addColCommand('BEFORE'), {label: 'Add column before'}));
+    items.push(tableEditItem(addColCommand('AFTER'), {label: 'Add column after'}));
+    items.push(tableEditItem(deleteTableAreaCommand('COL'), {label: 'Delete column'}));
+    items.push(tableEditItem(deleteTableAreaCommand('TABLE'), {label: 'Delete table'}));
+    if (header) items.push(tableEditItem(addHeaderCommand(), {label: 'Add header'}));
+    return new Dropdown(items, { title: 'Insert/edit table', label: 'Table' })
+    //TODO: Fix Dropdown to handle icon display
+    //return new Dropdown(items, { title: 'Insert/edit table', label: 'table', class: 'material-symbols-outlined' })
+  }
+
+  function tableEditItem(command, options) {
+    let passedOptions = {
+      run: command,
+      enable(state) { return command(state); },
+      active(state) { return false }  // FIX
+    };
+    for (let prop in options)
+      passedOptions[prop] = options[prop];
+    return new MenuItem(passedOptions);
+  }
+
+  /* Style Bar (List, Indent, Outdent) */
+
+  /**
+   * Return the MenuItems for the style bar, as specified in `config`.
+   * @param {Object} config The config object with booleans indicating whether list and denting items are included
+   * @param {Schema} schema 
+   * @returns {[MenuItem]}  An array or MenuItems to be shown in the style bar
+   */
+  function styleBarItems(config, schema) {
+    let items = [];
+    let { number, bullet, indent, outdent } = config.styleBar;
+    if (number) items.push(toggleListItem(schema, schema.nodes.ordered_list, { title: 'Toggle numbered list', label: 'format_list_numbered', class: 'material-symbols-outlined' }));
+    if (bullet) items.push(toggleListItem(schema, schema.nodes.bullet_list, { title: 'Toggle bulleted list', label: 'format_list_bulleted', class: 'material-symbols-outlined' }));
+    if (indent) items.push(indentItem(schema.nodes.blockquote, { title: 'Increase indent', label: 'format_indent_increase', class: 'material-symbols-outlined' }));
+    if (outdent) items.push(outdentItem({ title: 'Decrease indent', label: 'format_indent_decrease', class: 'material-symbols-outlined' }));
+    return items;
+  }
+
+  function toggleListItem(schema, nodeType, options) {
+    let passedOptions = {
+      active: (state) => { return listActive(state, nodeType) },
+      enable: true
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    return cmdItem(wrapInListCommand(schema, nodeType), passedOptions)
+  }
+
+  function listActive(state, nodeType) {
+    let listType = getListType(state);
+    return listType === listTypeFor(nodeType, state.schema)
+  }
+
+  function indentItem(nodeType, options) {
+    let passedOptions = {
+      active: (state) => { return isIndented(state) },
+      enable: true
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    return cmdItem(wrapIn(nodeType), passedOptions)
+  }
+
+  function outdentItem(options) {
+    let passedOptions = {
+      active: (state) => { return isIndented(state) },
+      enable: true
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    return cmdItem(lift, passedOptions)
+  }
+
+  /* Format Bar (B, I, U, etc) */
+
+  /**
+   * Return the array of formatting MenuItems that should show per the config.
+   * 
+   * @param {Object} config   The markupConfig that is passed-in, with boolean values in config.formatBar.
+   * @returns [MenuItem]      The array of MenuItems that show as passed in `config`
+   */
+  function formatItems(config, schema) {
+    let items = [];
+    let { bold, italic, underline, code, strikethrough, subscript, superscript } = config.formatBar;
+    if (bold) items.push(formatItem(schema.marks.strong, { title: 'Toggle bold', label: 'format_bold', class: 'material-symbols-outlined' }));
+    if (italic) items.push(formatItem(schema.marks.em, { title: 'Toggle italic', label: 'format_italic', class: 'material-symbols-outlined' }));
+    if (underline) items.push(formatItem(schema.marks.u, { title: 'Toggle underline', label: 'format_underline', class: 'material-symbols-outlined' }));
+    if (code) items.push(formatItem(schema.marks.code, { title: 'Toggle code', label: 'data_object', class: 'material-symbols-outlined' }));
+    if (strikethrough) items.push(formatItem(schema.marks.s, { title: 'Toggle strikethrough', label: 'strikethrough_s', class: 'material-symbols-outlined' }));
+    if (subscript) items.push(formatItem(schema.marks.sub, { title: 'Toggle subscript', label: 'subscript', class: 'material-symbols-outlined' }));
+    if (superscript) items.push(formatItem(schema.marks.sup, { title: 'Toggle superscript', label: 'superscript', class: 'material-symbols-outlined' }));
+    return items;
+  }
+
+  function formatItem(markType, options) {
+    let passedOptions = {
+      active: (state) => { return markActive(state, markType) },
+      enable: true
+    };
+    for (let prop in options) passedOptions[prop] = options[prop];
+    return cmdItem(toggleMark(markType), passedOptions)
+  }
+
+  /* Style DropDown (P, H1-H6, Code) */
+
+  /**
+   * Return the Dropdown containing the styling MenuItems that should show per the config.
+   * 
+   * @param {*} config    The markupConfig that is passed-in, with boolean values in config.styleMenu.
+   * @returns [Dropdown]  The array of MenuItems that show as passed in `config`
+   */
+  function styleMenuItems(config, schema) {
+    let items = [];
+    let { p, h1, h2, h3, h4, h5, h6, codeblock } = config.styleMenu;
+    if (p) items.push(blockTypeItem(schema.nodes.paragraph, { label: 'Normal' }));
+    if (h1) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 1 }, label: 'Header 1' }));
+    if (h2) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 2 }, label: 'Header 2' }));
+    if (h3) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 3 }, label: 'Header 3' }));
+    if (h4) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 4 }, label: 'Header 4' }));
+    if (h5) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 5 }, label: 'Header 5' }));
+    if (h6) items.push(blockTypeItem(schema.nodes.heading, { attrs: { level: 6 }, label: 'Header 6' }));
+    if (codeblock) items.push(blockTypeItem(schema.nodes.code_block, { label: 'Code' }));
+    return [new Dropdown(items, { title: 'Set paragraph style', label: 'Style' })]
+  }
+
+  /**
+  Build a menu item for changing the type of the textblock around the
+  selection to the given type. Provides `run`, `active`, and `select`
+  properties. Others must be given in `options`. `options.attrs` may
+  be an object to provide the attributes for the textblock node.
   */
+  function blockTypeItem(nodeType, options) {
+      let command = setBlockType(nodeType, options.attrs);
+      let passedOptions = {
+          run: command,
+          enable(state) { return command(state); },
+          active(state) {
+              let { $from, to, node } = state.selection;
+              if (node)
+                  return node.hasMarkup(nodeType, options.attrs);
+              return to <= $from.end() && $from.parent.hasMarkup(nodeType, options.attrs);
+          }
+      };
+      for (let prop in options)
+          passedOptions[prop] = options[prop];
+      return new MenuItem(passedOptions);
+  }
+
+  /* Rendering support for MenuItems */
+
+  /**
+   * Render the given, possibly nested, array of menu elements into a
+   * document fragment, placing separators between them (and ensuring no
+   * superfluous separators appear when some of the groups turn out to
+   * be empty).
+   * @param {EditorView} view 
+   * @param {[MenuItem | [MenuItem]]} content 
+   * @returns 
+   */
   function renderGrouped(view, content) {
       let result = document.createDocumentFragment();
       let updates = [], separators = [];

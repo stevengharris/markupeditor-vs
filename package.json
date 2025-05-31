@@ -65,6 +65,12 @@
                         "default": true,
                         "description": "Show toolbar"
                     },
+                    "markupEditor.visibility.insertBar": {
+                        "type": "boolean",
+                        "order": 10,
+                        "default": true,
+                        "description": "Show insert bar"
+                    },
                     "markupEditor.visibility.formatBar": {
                         "type": "boolean",
                         "order": 20,
@@ -82,6 +88,29 @@
                         "order": 40,
                         "default": true,
                         "description": "Show list/indent/outdent bar"
+                    }
+                }
+            },
+            {
+                "title": "Insert",
+                "properties": {
+                    "markupEditor.insertBar.link": {
+                        "type": "boolean",
+                        "order": 10,
+                        "default": true,
+                        "description": "Show link button"
+                    },
+                    "markupEditor.insertBar.image": {
+                        "type": "boolean",
+                        "order": 20,
+                        "default": true,
+                        "description": "Show image button"
+                    },
+                    "markupEditor.insertBar.table": {
+                        "type": "boolean",
+                        "order": 30,
+                        "default": true,
+                        "description": "Show table button"
                     }
                 }
             },
@@ -129,6 +158,23 @@
                         "order": 70,
                         "default": false,
                         "description": "Show superscript button"
+                    }
+                }
+            },
+            {
+                "title": "Table Menu",
+                "properties": {
+                    "markupEditor.tableMenu.header": {
+                        "type": "boolean",
+                        "order": 10,
+                        "default": true,
+                        "description": "Show add header"
+                    },
+                    "markupEditor.tableMenu.border": {
+                        "type": "boolean",
+                        "order": 20,
+                        "default": true,
+                        "description": "Show border submenu"
                     }
                 }
             },
