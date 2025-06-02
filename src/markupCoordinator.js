@@ -129,12 +129,10 @@ export class MarkupCoordinator {
         const markupConfig = JSON.stringify(vscode.workspace.getConfiguration().markupEditor);
 
         // Local paths to scripts run in the webview
-        const scriptMarkupConfigPath = vscode.Uri.joinPath(this.extensionUri, 'scripts', 'markupeditor_config.js');
         const scriptMarkupPath = vscode.Uri.joinPath(this.extensionUri, 'scripts', 'markupeditor.js');
         const scriptMarkupBootstrapPath = vscode.Uri.joinPath(this.extensionUri, 'scripts', 'markupeditor_vs.js');
     
         // And the uris we use to load scripts in the webview
-        const scriptMarkupConfigUri = webview.asWebviewUri(scriptMarkupConfigPath);
         const scriptMarkupUri = webview.asWebviewUri(scriptMarkupPath);
         const scriptMarkupBootstrapUri = webview.asWebviewUri(scriptMarkupBootstrapPath);
     
@@ -188,7 +186,6 @@ export class MarkupCoordinator {
                     <body>
                         <div id="editor"></div>
                         <script nonce="${nonce}">var markupConfig = ${markupConfig}</script>
-                        <!-- script nonce="${nonce}" src="${scriptMarkupConfigUri}"></script -->
                         <script nonce="${nonce}" src="${scriptMarkupUri}"></script>
                         <script nonce="${nonce}" src="${scriptMarkupBootstrapUri}"></script>
                     </body>
