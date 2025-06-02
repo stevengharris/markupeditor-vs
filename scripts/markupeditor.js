@@ -19507,6 +19507,49 @@
       view.dispatch(transaction);
       stateChanged();
   }
+  function insertTableCommand(rows, cols) {
+      const commandAdapter = (viewState, dispatch, view) => {
+          let state = view?.state ?? viewState;
+          const selection = state.selection;
+          const nodeTypes = state.schema.nodes;
+          let firstP;
+          const table_rows = [];
+          for (let j = 0; j < rows; j++) {
+              const table_cells = [];
+              for (let i = 0; i < cols; i++) {
+                  const paragraph = state.schema.node('paragraph');
+                  if ((i == 0) && (j == 0)) firstP = paragraph;
+                  table_cells.push(nodeTypes.table_cell.create(null, paragraph));
+              }
+              table_rows.push(nodeTypes.table_row.create(null, table_cells));
+          }
+          const table = nodeTypes.table.createChecked(null, table_rows);
+          if (!table) return false;     // Something went wrong, like we tried to insert it at a disallowed spot
+
+          if (dispatch) {
+              // Replace the existing selection and track the transaction
+              let transaction = view.state.tr.replaceSelectionWith(table, false);
+              // Locate the first paragraph position in the transaction's doc
+              let pPos;
+              transaction.doc.nodesBetween(selection.from, selection.from + table.nodeSize, (node, pos) => {
+                  if (node === firstP) {
+                      pPos = pos;
+                      return false;
+                  }                return true;
+              });
+              // Set the selection in the first cell, apply it to the state and  the view
+              const textSelection = TextSelection.near(transaction.doc.resolve(pPos));
+              transaction = transaction.setSelection(textSelection);
+              state = state.apply(transaction);
+              view.updateState(state);
+          }
+          
+          return true;
+      };
+
+      return commandAdapter;
+  }
+
   /**
    * Add a row before or after the current selection, whether it's in the header or body.
    * For rows, AFTER = below; otherwise above.
@@ -20197,11 +20240,7 @@
       /**
       Create a dropdown wrapping the elements.
       */
-      constructor(content, 
-      /**
-      @internal
-      */
-      options = {}) {
+      constructor(content, options = {}) {
           this.options = options;
           this.options = options || {};
           this.content = Array.isArray(content) ? content : [content];
@@ -20246,9 +20285,7 @@
           }
           return { dom: wrap, update };
       }
-      /**
-      @internal
-      */
+      
       expand(dom, items) {
           let menuDOM = crelt("div", { class: prefix$1 + "-dropdown-menu " + (this.options.class || "") }, items);
           let done = false;
@@ -20261,6 +20298,51 @@
           }
           dom.appendChild(menuDOM);
           return { close, node: menuDOM };
+      }
+  }
+
+  /**
+  Represents a submenu wrapping a group of elements that start
+  hidden and expand to the right when hovered over or tapped.
+  */
+  class DropdownSubmenu {
+      /**
+      Creates a submenu for the given group of menu elements. The
+      following options are recognized:
+      */
+      constructor(content, options = {}) {
+          this.options = options;
+          this.content = Array.isArray(content) ? content : [content];
+      }
+
+      /**
+      Renders the submenu.
+      */
+      render(view) {
+          let items = renderDropdownItems(this.content, view);
+          let win = view.dom.ownerDocument.defaultView || window;
+          let label = crelt("div", { class: prefix$1 + "-submenu-label" }, translate(view, this.options.label || ""));
+          let wrap = crelt("div", { class: prefix$1 + "-submenu-wrap" }, label, crelt("div", { class: prefix$1 + "-submenu" }, items.dom));
+          let listeningOnClose = null;
+          label.addEventListener("mousedown", e => {
+              e.preventDefault();
+              markMenuEvent(e);
+              setClass(wrap, prefix$1 + "-submenu-wrap-active", false);
+              if (!listeningOnClose)
+                  win.addEventListener("mousedown", listeningOnClose = () => {
+                      if (!isMenuEvent(wrap)) {
+                          wrap.classList.remove(prefix$1 + "-submenu-wrap-active");
+                          win.removeEventListener("mousedown", listeningOnClose);
+                          listeningOnClose = null;
+                      }
+                  });
+          });
+          function update(state) {
+              let inner = items.update(state);
+              wrap.style.display = inner ? "" : "none";
+              return inner;
+          }
+          return { dom: wrap, update };
       }
   }
 
@@ -20455,6 +20537,12 @@
   function tableMenuItems(config, schema) {
     let items = [];
     let { header, border } = config.tableMenu;
+    let createItems = [];
+    createItems.push(insertTableItem(1, 1, {label: '1 column'}));
+    createItems.push(insertTableItem(1, 2, {label: '2 columns'}));
+    createItems.push(insertTableItem(1, 3, {label: '3 columns'}));
+    createItems.push(insertTableItem(1, 4, {label: '4 columns'}));
+    items.push(new DropdownSubmenu(createItems, {title: 'Insert new table', label: 'Create'}));
     items.push(tableEditItem(addRowCommand('BEFORE'), {label: 'Add row above'}));
     items.push(tableEditItem(addRowCommand('AFTER'), {label: 'Add row below'}));
     items.push(tableEditItem(deleteTableAreaCommand('ROW'), {label: 'Delete row'}));
@@ -20466,6 +20554,18 @@
     return new Dropdown(items, { title: 'Insert/edit table', label: 'Table' })
     //TODO: Fix Dropdown to handle icon display
     //return new Dropdown(items, { title: 'Insert/edit table', label: 'table', class: 'material-symbols-outlined' })
+  }
+
+  function insertTableItem(rows, cols, options) {
+    let command = insertTableCommand(rows, cols);
+    let passedOptions = {
+      run: command,
+      enable(state) { return command(state); },
+      active(state) { return false }  // FIX
+    };
+    for (let prop in options)
+      passedOptions[prop] = options[prop];
+    return new MenuItem(passedOptions);
   }
 
   function tableEditItem(command, options) {
@@ -20489,11 +20589,15 @@
    */
   function styleBarItems(config, schema) {
     let items = [];
-    let { number, bullet, indent, outdent } = config.styleBar;
-    if (number) items.push(toggleListItem(schema, schema.nodes.ordered_list, { title: 'Toggle numbered list', label: 'format_list_numbered', class: 'material-symbols-outlined' }));
-    if (bullet) items.push(toggleListItem(schema, schema.nodes.bullet_list, { title: 'Toggle bulleted list', label: 'format_list_bulleted', class: 'material-symbols-outlined' }));
-    if (indent) items.push(indentItem(schema.nodes.blockquote, { title: 'Increase indent', label: 'format_indent_increase', class: 'material-symbols-outlined' }));
-    if (outdent) items.push(outdentItem({ title: 'Decrease indent', label: 'format_indent_decrease', class: 'material-symbols-outlined' }));
+    let { list, dent } = config.styleBar;
+    if (list) {
+      items.push(toggleListItem(schema, schema.nodes.ordered_list, { title: 'Toggle numbered list', label: 'format_list_numbered', class: 'material-symbols-outlined' }));
+      items.push(toggleListItem(schema, schema.nodes.bullet_list, { title: 'Toggle bulleted list', label: 'format_list_bulleted', class: 'material-symbols-outlined' }));
+    }
+    if (dent) {
+      items.push(indentItem(schema.nodes.blockquote, { title: 'Increase indent', label: 'format_indent_increase', class: 'material-symbols-outlined' }));
+      items.push(outdentItem({ title: 'Decrease indent', label: 'format_indent_decrease', class: 'material-symbols-outlined' }));
+    }
     return items;
   }
 
@@ -21423,13 +21527,126 @@
     return plugins;
   }
 
+  class MenuConfig {
+    constructor(visibility, insertBar, formatBar, styleMenu, styleBar, tableMenu) {
+      this.visibility = visibility;
+      this.insertBar = insertBar;
+      this.formatBar = formatBar;
+      this.styleMenu = styleMenu;
+      this.styleBar = styleBar;
+      this.tableMenu = tableMenu;
+    }
+
+    static standard() {
+      return new MenuConfig(
+        VisibilityConfig.standard(),
+        InsertBarConfig.standard(),
+        FormatBarConfig.standard(),
+        StyleMenuConfig.standard(),
+        StyleBarConfig.standard(),
+        TableMenuConfig.standard()
+      )
+    }
+  }
+
+  class VisibilityConfig {
+    constructor(toolbar, insertBar, formatBar, styleMenu, styleBar) {
+      this.toolbar = toolbar;
+      this.insertBar = insertBar;
+      this.formatBar = formatBar;
+      this.styleMenu = styleMenu;
+      this.styleBar = styleBar;
+    }
+
+    static standard() {
+      return new VisibilityConfig(true, true, true, true, true)
+    }
+  }
+
+  class InsertBarConfig {
+    constructor(link, image, table) {
+      this.link = link;
+      this.image = image;
+      this.table = table;
+    }
+
+    static standard() {
+      return new InsertBarConfig(true, true, true)
+    }
+  }
+
+  class FormatBarConfig {
+    constructor(bold, italic, underline, code, strikethrough, subscript, superscript) {
+      this.bold = bold;
+      this.italic = italic;
+      this.underline = underline;
+      this.code = code;
+      this.strikethrough = strikethrough;
+      this.subscript = subscript;
+      this.superscript = superscript;
+    }
+
+    static standard() {
+      return new FormatBarConfig(true, true, true, true, true, false, false)
+    }
+  }
+
+  class StyleMenuConfig {
+    constructor (p, h1, h2, h3, h4, h5, h6, codeblock) {
+      this.p = p;
+      this.h1 = h1;
+      this.h2 = h2;
+      this.h3 = h3;
+      this.h4 = h4;
+      this.h5 = h5;
+      this.h6 = h6;
+      this.codeblock = codeblock;
+    }
+
+    static standard() {
+      return new StyleBarConfig(true, true, true, true, true, true, true, true)
+    }
+  }
+
+  class StyleBarConfig {
+    constructor(list, dent) {
+      this.list = list;
+      this.dent = dent;
+    }
+
+    static standard() {
+      return new StyleBarConfig(true, true)
+    }
+  }
+
+  class TableMenuConfig {
+    constructor(border, header) {
+      this.border = border;
+      this.header = header;
+    }
+
+    static standard() {
+      return new TableMenuConfig(true, true)
+    }
+  }
+
+  /**
+   * Set the EditorView for the MarkupEditor.
+   * 
+   * Note that `markupConfig` is a global that must already exist, but which can be undefined.
+   * This is typically accomplished by setting it in the first script loaded into the view, 
+   * something as simple as `<script>var markupConfig;</script>'. For an environment like VSCode, 
+   * which has a rich configuration capability, it can be set using `vscode.getConfiguration()`.
+   * 
+   * If `markupConfig` is undefined, the "standard" config is supplied by `MenuConfig.standard()`.
+   */
   window.view = new EditorView(document.querySelector("#editor"), {
     state: EditorState.create({
       // For the MarkupEditor, we can just use the editor element. 
       // There is no need to use a separate content element.
       doc: DOMParser.fromSchema(schema).parse(document.querySelector("#editor")),
       plugins: markupSetup({
-        config: markupConfig,
+        config: markupConfig ?? MenuConfig.standard(),
         schema: schema
       })
     }),
@@ -21463,6 +21680,7 @@
     }
   });
 
+  exports.MenuConfig = MenuConfig;
   exports.addButton = addButton;
   exports.addCol = addCol;
   exports.addDiv = addDiv;

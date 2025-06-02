@@ -67,25 +67,25 @@
                     },
                     "markupEditor.visibility.insertBar": {
                         "type": "boolean",
-                        "order": 10,
+                        "order": 20,
                         "default": true,
                         "description": "Show insert bar"
                     },
                     "markupEditor.visibility.formatBar": {
                         "type": "boolean",
-                        "order": 20,
+                        "order": 30,
                         "default": true,
                         "description": "Show format bar"
                     },
                     "markupEditor.visibility.styleMenu": {
                         "type": "boolean",
-                        "order": 30,
+                        "order": 40,
                         "default": true,
                         "description": "Show paragraph style menu"
                     },
                     "markupEditor.visibility.styleBar": {
                         "type": "boolean",
-                        "order": 40,
+                        "order": 50,
                         "default": true,
                         "description": "Show list/indent/outdent bar"
                     }
@@ -234,29 +234,17 @@
             {
                 "title": "Style Bar",
                 "properties": {
-                    "markupEditor.styleBar.bullet": {
+                    "markupEditor.styleBar.list": {
                         "type": "boolean",
                         "order": 10,
                         "default": true,
-                        "description": "Show numbered list button"
+                        "description": "Show list buttons"
                     },
-                    "markupEditor.styleBar.number": {
+                    "markupEditor.styleBar.dent": {
                         "type": "boolean",
                         "order": 20,
                         "default": true,
-                        "description": "Show bulleted list button"
-                    },
-                    "markupEditor.styleBar.indent": {
-                        "type": "boolean",
-                        "order": 30,
-                        "default": true,
-                        "description": "Show indent button"
-                    },
-                    "markupEditor.styleBar.outdent": {
-                        "type": "boolean",
-                        "order": 40,
-                        "default": true,
-                        "description": "Show outdent button"
+                        "description": "Show indent/outdent buttons"
                     }
                 }
             }
