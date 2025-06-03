@@ -19854,6 +19854,54 @@
       stateChanged();
       view.focus();
   }
+  function setBorderCommand(border) {
+      const commandAdapter = (viewState, dispatch, view) => {
+          let state = view?.state ?? viewState;
+          const selection = state.selection;
+          let table, fromPos, toPos;
+          state.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+              if (node.type === state.schema.nodes.table) {
+                  table = node;
+                  fromPos = pos;
+                  toPos = pos + node.nodeSize;
+                  return false;
+              }            return false;
+          });
+          if (!table) return;
+          switch (border) {
+              case 'outer':
+                  table.attrs.class = 'bordered-table-outer';
+                  break;
+              case 'header':
+                  table.attrs.class = 'bordered-table-header';
+                  break;
+              case 'cell':
+                  table.attrs.class = 'bordered-table-cell';
+                  break;
+              case 'none':
+                  table.attrs.class = 'bordered-table-none';
+                  break;
+              default:
+                  table.attrs.class = 'bordered-table-cell';
+                  break;
+          }
+          if (dispatch) {
+              // At this point, the state.selection is in the new header row we just added. By definition, 
+              // the header is placed before the original selection, so we can add its size to the 
+              // selection to restore the selection to where it was before.
+               const transaction = view.state.tr
+                  .setMeta("bordered-table", {border: border, fromPos: fromPos, toPos: toPos})
+                  .setNodeMarkup(fromPos, table.type, table.attrs);
+              view.dispatch(transaction);
+              stateChanged();
+          }
+
+          return true;
+      };
+
+      return commandAdapter;
+  }
+
   /**
    * Get the border around and within the cell.
    * @returns {'outer' | 'header' | 'cell' | 'none'} The type of table border known on the Swift side
@@ -20551,6 +20599,14 @@
     items.push(tableEditItem(deleteTableAreaCommand('COL'), {label: 'Delete column'}));
     items.push(tableEditItem(deleteTableAreaCommand('TABLE'), {label: 'Delete table'}));
     if (header) items.push(tableEditItem(addHeaderCommand(), {label: 'Add header'}));
+    if (border) {
+      let borderItems = [];
+      borderItems.push(tableBorderItem(setBorderCommand('cell'), {label: 'All'}));
+      borderItems.push(tableBorderItem(setBorderCommand('outer'), {label: 'Outer'}));
+      borderItems.push(tableBorderItem(setBorderCommand('header'), {label: 'Header'}));
+      borderItems.push(tableBorderItem(setBorderCommand('none'), {label: 'None'}));
+      items.push(new DropdownSubmenu(borderItems, {title: 'Set border', label: 'Border'}));
+    }
     return new Dropdown(items, { title: 'Insert/edit table', label: 'Table' })
     //TODO: Fix Dropdown to handle icon display
     //return new Dropdown(items, { title: 'Insert/edit table', label: 'table', class: 'material-symbols-outlined' })
@@ -20569,6 +20625,17 @@
   }
 
   function tableEditItem(command, options) {
+    let passedOptions = {
+      run: command,
+      enable(state) { return command(state); },
+      active(state) { return false }  // FIX
+    };
+    for (let prop in options)
+      passedOptions[prop] = options[prop];
+    return new MenuItem(passedOptions);
+  }
+
+  function tableBorderItem(command, options) {
     let passedOptions = {
       run: command,
       enable(state) { return command(state); },
