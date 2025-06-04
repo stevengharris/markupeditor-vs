@@ -21005,6 +21005,7 @@
     }
 
     update() {
+      console.log("UPDATE Toolbar");
       if (this.editorView.root != this.root) {
         let { dom, update } = renderGrouped(this.editorView, this.content);
         this.contentUpdate = update;
@@ -21014,14 +21015,14 @@
       this.contentUpdate(this.editorView.state);
       if (this.floating) {
         this.updateScrollCursor();
-      }
-      else {
+      } else {
         if (this.menu.offsetWidth != this.widthForMaxHeight) {
           this.widthForMaxHeight = this.menu.offsetWidth;
           this.maxHeight = 0;
         }
         if (this.menu.offsetHeight > this.maxHeight) {
-          this.maxHeight = this.menu.offsetHeight;
+          // Don't reset maxHeight because intermediate updates render as text, expanding height
+          // this.maxHeight = this.menu.offsetHeight;
           this.menu.style.minHeight = this.maxHeight + "px";
         }
       }
@@ -21064,12 +21065,13 @@
         if (editorRect.top < top && editorRect.bottom >= this.menu.offsetHeight + 10) {
           this.floating = true;
           let menuRect = this.menu.getBoundingClientRect();
+          let spacerHeight = this.menu.firstChild.getBoundingClientRect().height + 10;
           this.menu.style.left = menuRect.left + "px";
           this.menu.style.width = menuRect.width + "px";
           if (scrollAncestor)
             this.menu.style.top = top + "px";
           this.menu.style.position = "fixed";
-          this.spacer = crelt("div", { class: prefix + "-spacer", style: `height: ${menuRect.height}px` });
+          this.spacer = crelt("div", { class: prefix + "-spacer", style: `height: ${spacerHeight}px` });
           parent.insertBefore(this.spacer, this.menu);
         }
       }
