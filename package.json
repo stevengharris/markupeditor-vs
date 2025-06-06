@@ -290,7 +290,7 @@
     },
     "scripts": {
         "vscode:prepublish": "rimraf ./out && npm run package",
-        "precompile": "rm -f ./scripts/markupeditor.js && cp ./node_modules/markupeditor/dist/markupeditor.umd.js ./scripts/markupeditor.js",
+        "precompile": "sh precompile.sh",
         "compile": "node ./esbuild.js",
         "package": "cross-env NODE_ENV=production node ./esbuild.js",
         "watch": "node ./esbuild.js --watch",
