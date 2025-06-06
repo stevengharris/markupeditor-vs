@@ -145,7 +145,6 @@ export class MarkupCoordinator {
         const styleMarkupVSPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'markup_vs.css');
         const styleToolbarPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'toolbar.css');
         const styleCodiconsPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'codicon.css');
-        const styleMaterialPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'material-icons.css');
     
         // Uri to load styles into webview
         const styleResetUri = webview.asWebviewUri(styleResetPath);
@@ -155,7 +154,6 @@ export class MarkupCoordinator {
         const styleMarkupVSUri = webview.asWebviewUri(styleMarkupVSPath);
         const styleToolbarUri = webview.asWebviewUri(styleToolbarPath);
         const styleCodiconsUri = webview.asWebviewUri(styleCodiconsPath);
-        const styleMaterialUri = webview.asWebviewUri(styleMaterialPath);
     
         // Use a nonce to only allow specific scripts to be run and images to load.
         const nonce = getNonce();
@@ -181,7 +179,6 @@ export class MarkupCoordinator {
                         <link href="${styleMarkupVSUri}" rel="stylesheet">
                         <link href="${styleToolbarUri}" rel="stylesheet">
                         <link href="${styleCodiconsUri}" rel="stylesheet">
-                        <link href="${styleMaterialUri}" rel="stylesheet">
                     </head>
                     <body>
                         <div id="editor"></div>
