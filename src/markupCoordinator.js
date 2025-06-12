@@ -182,7 +182,7 @@ export class MarkupCoordinator {
                     </head>
                     <body>
                         <div id="editor"></div>
-                        <script nonce="${nonce}">var markupConfig = ${markupConfig}</script>
+                        <script nonce="${nonce}">let markupConfig = ${markupConfig}</script>
                         <script nonce="${nonce}" src="${scriptMarkupUri}"></script>
                         <script nonce="${nonce}" src="${scriptMarkupBootstrapUri}"></script>
                     </body>
