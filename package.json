@@ -1,5 +1,5 @@
 {
-    "name": "markupeditor",
+    "name": "markupeditor-vs",
     "displayName": "Markup Editor",
     "description": "WYSIWYG editing for HTML",
     "author": {
@@ -11,7 +11,7 @@
     "icon": "icon.png",
     "repository": {
         "type": "git",
-        "url": "https://github.com/stevengharris/markupeditorvs"
+        "url": "https://github.com/stevengharris/markupeditor-vs"
     },
     "bugs": {
         "url": "https://github.com/stevengharris/markupeditorvs/issues"
@@ -21,7 +21,7 @@
     "engines": {
         "vscode": "^1.89.0"
     },
-    "qna": "https://github.com/stevengharris/markupeditorvs/issues",
+    "qna": "https://github.com/stevengharris/markupeditor-vs/issues",
     "categories": [
         "Other"
     ],
@@ -298,7 +298,7 @@
     },
     "dependencies": {
         "@material-design-icons/font": "^0.14.15",
-        "markupeditor": "file:../markupeditor",
+        "markupeditor-base": "file:../markupeditor-base",
         "prosemirror-state": "^1.0.0"
     },
     "devDependencies": {

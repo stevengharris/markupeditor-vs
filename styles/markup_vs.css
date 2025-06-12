@@ -1,6 +1,7 @@
-#editor, .editor {
-	color: var(--vscode-foreground);
-	background-color: var(--vscode-editor-background);
+#editor,
+.editor {
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
 }
 
 .vscode-dark {
@@ -35,19 +36,20 @@
     /* Entries for @media (prefers-color-scheme: dark) from toolbar.css */
 
     .Markup-toolbar {
-        background: black;
-        color: lightgray;
+        color: rgb(250, 249, 246);
+        background: rgba(40, 40, 43, 0.9);
         border-bottom: 1px solid gray;
     }
 
     .Markup-menuitem {
-        border: 1px solid white;
+        border: 1px solid blue;
+        background: black;
         fill: white;
     }
 
     .Markup-menuitem-active {
-        fill: black;
-        background: white;
+        fill: white;
+        background: blue;
     }
 
     .Markup-menuitem-disabled {
@@ -62,22 +64,18 @@
         border-right: 1px solid gray;
     }
 
-    .Markup-menu-dropdown {
-        color: white;
-    }
-
-    .Markup-menu-dropdown-indicator {
-        color:white;
-    }
-        
-    .Markup-menu-dropdown-menu, .Markup-menu-submenu {
-        background: black;
-        color: white;
+    .Markup-menu-dropdown-menu,
+    .Markup-menu-submenu {
         border: 1px solid lightgray;
     }
-        
-    .Markup-menu-dropdown-item:hover {
-        background: rgb(11, 11, 11);
+
+    .Markup-menu-dropdown-item:hover,
+    .Markup-menu-submenu-wrap:hover {
+        background: rgb(80, 80, 80);
     }
 
+    .Markup-menu-submenu {
+        /* background cannot be inherited because of hover highlighting in dropdown */
+        background: black;
+    }
 }

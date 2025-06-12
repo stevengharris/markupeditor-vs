@@ -1,1 +1,1 @@
-../node_modules/markupeditor/dist/markupeditor.umd.js
+../node_modules/markupeditor-base/dist/markupeditor.umd.js
