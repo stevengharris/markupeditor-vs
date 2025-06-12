@@ -65,27 +65,33 @@
                         "default": true,
                         "description": "Show toolbar"
                     },
-                    "markupEditor.visibility.insertBar": {
+                    "markupEditor.visibility.correctionBar": {
                         "type": "boolean",
                         "order": 20,
+                        "default": false,
+                        "description": "Show undo/redo bar"
+                    },
+                    "markupEditor.visibility.insertBar": {
+                        "type": "boolean",
+                        "order": 30,
                         "default": true,
                         "description": "Show insert bar"
                     },
                     "markupEditor.visibility.formatBar": {
                         "type": "boolean",
-                        "order": 30,
+                        "order": 40,
                         "default": true,
                         "description": "Show format bar"
                     },
                     "markupEditor.visibility.styleMenu": {
                         "type": "boolean",
-                        "order": 40,
+                        "order": 50,
                         "default": true,
                         "description": "Show paragraph style menu"
                     },
                     "markupEditor.visibility.styleBar": {
                         "type": "boolean",
-                        "order": 50,
+                        "order": 60,
                         "default": true,
                         "description": "Show list/indent/outdent bar"
                     }
