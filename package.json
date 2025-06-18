@@ -94,6 +94,12 @@
                         "order": 60,
                         "default": true,
                         "description": "Show list/indent/outdent bar"
+                    },
+                    "markupEditor.visibility.search": {
+                        "type": "boolean",
+                        "order": 70,
+                        "default": true,
+                        "description": "Show search button"
                     }
                 }
             },
