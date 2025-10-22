@@ -4,6 +4,10 @@
     background-color: var(--vscode-editor-background);
 }
 
+.Markup-toolbar {
+    top: 8px;
+}
+
 .vscode-dark {
 
     /* Entries for @media (prefers-color-scheme: dark) from markup.css */
@@ -42,22 +46,21 @@
     }
 
     .Markup-menuitem {
-        border: 1px solid blue;
+        color: lightblue;
+        border: 1px solid lightblue;
+        /* border: 1px solid #4183c4; */
         background: black;
-        fill: white;
+        fill: lightblue;
     }
 
     .Markup-menuitem-active {
-        fill: white;
-        background: blue;
+        fill: black;
+        color: black;
+        background: lightblue;
     }
 
     .Markup-menuitem-disabled {
         opacity: .6;
-    }
-
-    .Markup-icon svg {
-        fill: inherit;
     }
 
     .Markup-menuseparator {
@@ -78,4 +81,74 @@
         /* background cannot be inherited because of hover highlighting in dropdown */
         background: black;
     }
+
+    .Markup-selection {
+        border: 1px solid lightblue;
+    }
+
+    /* Toolbar-more styling */
+
+    .Markup-toolbar-more {
+        color: rgb(250, 249, 246);
+        background: rgba(40, 40, 43, 0.9);
+        border-bottom: 1px solid gray;
+    }
+
+    /* Searchbar styling */
+
+    .Markup-searchbar {
+        color: rgb(250, 249, 246);
+        background: rgba(40, 40, 43, 0.9);
+        border-bottom: 1px solid gray;
+    }
+
+    .Markup-searchbar input {
+        color: rgb(250, 249, 246);
+        background: rgb(40, 40, 43);
+        border: 1px solid gray;
+    }
+
+    /* Dialog/prompt styling for insert/edit actions */
+
+    .Markup-prompt-overlay {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .Markup-toolbar-overlay {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .Markup-prompt {
+        background: black;
+        box-shadow: -.5px 2px 5px rgba(255, 255, 255, 0.8);
+    }
+
+    .Markup-prompt p {
+        color: white;
+    }
+
+    .Markup-prompt input[type="text"] {
+        color: rgb(250, 249, 246);
+        background: rgb(40, 40, 43);
+        border: 1px solid gray;
+    }
+
+    .Markup-prompt input.invalid {
+        color: pink;
+    }
+
+    .Markup-menu-tablesizer {
+        /* background cannot be inherited because of hover highlighting in dropdown */
+        background: black;
+    }
+
+    .Markup-menu-dropdown-menu,
+    .Markup-menu-submenu {
+        border: 1px solid lightgray;
+    }
+
+    .Markup-menu-tablesizer .Markup-menu-dropdown-item {
+        border: 1px solid lightblue;
+    }
+
 }
