@@ -138,21 +138,17 @@ export class MarkupCoordinator {
     
         // Local path to css styles
         // Note that mirror.css, markup.css, and codelog.css are unmodified copies from MarkupEditor and CodeLog.
-        const styleResetPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'reset.css');
-        const styleMainPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'vscode.css');
         const styleMirrorPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'mirror.css');
         const styleMarkupPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'markup.css');
-        const styleMarkupVSPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'markup_vs.css');
         const styleToolbarPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'toolbar.css');
+        const styleMarkupVSPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'markup_vs.css');
         const styleCodiconsPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'codicon.css');
     
         // Uri to load styles into webview
-        const styleResetUri = webview.asWebviewUri(styleResetPath);
-        const styleMainUri = webview.asWebviewUri(styleMainPath);
         const styleMirrorUri = webview.asWebviewUri(styleMirrorPath);
         const styleMarkupUri = webview.asWebviewUri(styleMarkupPath);
-        const styleMarkupVSUri = webview.asWebviewUri(styleMarkupVSPath);
         const styleToolbarUri = webview.asWebviewUri(styleToolbarPath);
+        const styleMarkupVSUri = webview.asWebviewUri(styleMarkupVSPath);
         const styleCodiconsUri = webview.asWebviewUri(styleCodiconsPath);
     
         // Use a nonce to only allow specific scripts to be run and images to load.
@@ -172,12 +168,10 @@ export class MarkupCoordinator {
                         -->
                         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; img-src *; script-src 'nonce-${nonce}';">
             
-                        <link href="${styleResetUri}" rel="stylesheet">
-                        <link href="${styleMainUri}" rel="stylesheet">
                         <link href="${styleMirrorUri}" rel="stylesheet">
                         <link href="${styleMarkupUri}" rel="stylesheet">
-                        <link href="${styleMarkupVSUri}" rel="stylesheet">
                         <link href="${styleToolbarUri}" rel="stylesheet">
+                        <link href="${styleMarkupVSUri}" rel="stylesheet">
                         <link href="${styleCodiconsUri}" rel="stylesheet">
                     </head>
                     <body>
