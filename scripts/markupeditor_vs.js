@@ -80,7 +80,7 @@ function handleMUCommand(command) {
 };
 
 function bootstrapCommonHtml() {
-    console.log('Set up the toolbar')
+    new MU.MarkupEditor(document.querySelector('#editor'))
 }
 
 /**
