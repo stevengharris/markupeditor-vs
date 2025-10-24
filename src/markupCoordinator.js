@@ -1,5 +1,5 @@
-import vscode from 'vscode';
-import { getNonce, pathToDocument } from './utilities';
+import vscode from 'vscode'
+import { getNonce, pathToDocument } from './utilities'
 
 /**
  * The MarkupCoordinator set up the webview when it is instantiated and coordinates messaging 
@@ -13,12 +13,13 @@ import { getNonce, pathToDocument } from './utilities';
  */
 export class MarkupCoordinator {
 
-    currentPanel;
-    extensionUri;
+    currentPanel
+    extensionUri
+    dirty = false
 
     constructor(context, document, webviewPanel) {
-        this.extensionUri = context.extensionUri;
-        this.currentPanel = webviewPanel;
+        this.extensionUri = context.extensionUri
+        this.currentPanel = webviewPanel
 
         // Add directories holding css and scripts to localResourceRoots so we can load them,
         // and allow content in the document's directory to load (e.g., images), or below 
@@ -30,37 +31,39 @@ export class MarkupCoordinator {
                 vscode.Uri.joinPath(this.extensionUri, 'scripts'),
                 vscode.Uri.file(pathToDocument(document))
             ]
-        };
+        }
     
         // Load the initial html with scripts and css. The actual html content to be edited
         // is loaded later by calling `updateWebview`.
-        webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
+        webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview)
     
         // Track changes to the panel
         webviewPanel.onDidChangeViewState(e => {
-            this.currentPanel = e.webviewPanel;
-        });
+            this.currentPanel = e.webviewPanel
+        })
 
         webviewPanel.onDidDispose(() => {
-            this.changeDocumentSubscription.dispose();
-        });
+            this.changeDocumentSubscription.dispose()
+        })
 
         // Set up the message handler for messages coming from the webview
-        webviewPanel.webview.onDidReceiveMessage(this.handleMessage.bind(this));
+        webviewPanel.webview.onDidReceiveMessage((message) => {
+            this.handleMessage(document, message)
+        })
 
         // We're all set up, so update the webview.
-        this.updateWebview(document);
+        this.updateWebview(document)
 
-    };
+    }
 
     /**
      * Use the vscode `onDidChangeTextDocument function to change the document subscription.
      */
     changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
         if (e.document.uri.toString() === document.uri.toString()) {
-            updateWebview(e.document);
+            updateWebview(e.document)
         }
-    });
+    })
 
     /**
      * Update the contents of the panel's webview by posting a message with its contents and the info needed 
@@ -69,16 +72,16 @@ export class MarkupCoordinator {
      * The message is received by the webview in markupeditor_vs.js in `handleMessage`.
      */
     async updateWebview(document) {
-        const contents = await document.getText();
+        const contents = await document.getText()
         const webview = this.currentPanel.webview
-        const documentPath = pathToDocument(document);
-        const uriPath = vscode.Uri.joinPath(webview.asWebviewUri(vscode.Uri.file('')), documentPath).toString();
+        const documentPath = pathToDocument(document)
+        const uriPath = vscode.Uri.joinPath(webview.asWebviewUri(vscode.Uri.file('')), documentPath).toString()
         webview.postMessage({
             type: 'update',
             contents: contents,
             uriPath: uriPath
-        });
-    };
+        })
+    }
 
     /**
      * Handle messages from the webview.
@@ -93,66 +96,141 @@ export class MarkupCoordinator {
      * @param {object} message A serialized object sent from the webview. The `command` property
      *                          tells what kind of message it us.
      */
-    handleMessage(message) {
+    handleMessage(document, message) {
         switch (message.command) {
             case 'alert':
-                vscode.window.showErrorMessage(message.text);
-                return;
+                vscode.window.showErrorMessage(message.text)
+                return
             default:
-                this.handleMUCallback(message);
-                return;
+                this.handleMUCallback(document, message)
+                return
         }
     }
 
     /**
      * Something happened in the MarkupEditor webview. Take action as-needed based on the callback.
      * 
+     * For now (at least), we handle callbacks directly in the MarkupCoordinator and do not notify 
+     * a MarkupDelegate. The VSCode extension is not written to be re-used like markupeditor-base, 
+     * so it is not written to make it configurable for multiple consumers customizing how they respond 
+     * to document state changes. IOW, the actions we are taking here are specific to the extension.
+     * 
+     * At the same time, the callback processing covers all the callbacks generally silently, reporting
+     * any that are unknown.
+     * 
+     * Simple string callbacks are processed in this method, while callbacks with encoded objects that 
+     * need to be parsed from JSON are passed on the `handleMUMessage`.
+     * 
      * @param {string} callback The type of notification/callback received from the webview.
      */
-    handleMUCallback(callback) {
-        if (callback && (callback.substring(0, 5) === 'input')) {
-            console.log('input in ' + callback.substring(5));
-            return;
-        };
+    async handleMUCallback(document, callback) {
+        if (callback.substring(0, 5) === 'input') {
+            if (!this.dirty) await this.setDirty(document)
+            console.log('input in ' + callback.substring(5))
+            return
+        }
         switch (callback) {
             case 'ready':
-                console.log('MarkupEditor is ready');
-                return;
+                console.log('MarkupEditor is ready')
+                return
+            case 'selectionChanged':
+            case 'clicked':
+            case 'focus':
+            case 'blur':
+            case 'updateHeight':
+            case 'activateSearch':
+            case 'deactivateSearch':
+            case 'searched':
+            case 'loadedUserFiles':
+                return
             default:
-                console.log('Unknown message: ' + callback);
-                return;
-        };
-    };    
+                try {
+                    let messageObject = JSON.parse(callback)
+                    this.handleMUMessage(messageObject)
+                } catch {
+                    console.log('Unknown message: ' + callback)
+                    return
+                }
+        }
+    }
 
+    /**
+     * Take appropriate action for message objects coming from the MarkupEditor.
+     * 
+     * @param {Object} messageObject An object that was parsed from the message JSON.
+     */
+    handleMUMessage(messageObject) {
+        switch (messageObject.messageType) {
+            case 'error':
+                let {code, message, info, alert} = messageObject
+                let errorMessage = `Error ${code}: ${message}`
+                if (info) errorMessage += `/n${info}`
+                if (alert) {
+                    vscode.window.showErrorMessage(errorMessage)
+                } else {
+                    console.log(errorMessage)
+                }
+                return
+            case 'addedImage':
+                let {src: addedSrc, divId: addedDivId} = messageObject
+                let addedMessage = `Added image ${addedSrc}`
+                if (addedDivId) addedMessage += ` in ${addedDivId}`
+                console.log(addedMessage)
+                return
+            case 'deletedImage':
+                let {src: deletedSrc, divId: deletedDivId} = messageObject
+                let deletedMessage = `Deleted image ${deletedSrc}`
+                if (deletedDivId) deletedMessage += ` in ${deletedDivId}`
+                console.log(deletedMessage)
+                return
+            case 'buttonClicked':
+                let {id, rect} = messageObject
+                return
+            case 'copyImage':
+                let {src: copiedSrc, alt, dimensions} = messageObject
+                return
+            default:
+                console.log('Unknown message type: ' + messageObject.type)
+                return
+        }
+    }
+
+    /**
+     * Return the initial HTML for the webview, which loads the styles and scripts needed to 
+     * support the MarkupEditor.
+     * 
+     * @param {Webview} webview 
+     * @returns {string}
+     */
     getHtmlForWebview(webview) {
 
-        const markupConfig = JSON.stringify(vscode.workspace.getConfiguration().markupEditor);
+        const markupConfig = JSON.stringify(vscode.workspace.getConfiguration().markupEditor)
 
         // Local paths to scripts run in the webview
-        const scriptMarkupPath = vscode.Uri.joinPath(this.extensionUri, 'scripts', 'markupeditor.js');
-        const scriptMarkupBootstrapPath = vscode.Uri.joinPath(this.extensionUri, 'scripts', 'markupeditor_vs.js');
+        const scriptMarkupPath = vscode.Uri.joinPath(this.extensionUri, 'scripts', 'markupeditor.js')
+        const scriptMarkupBootstrapPath = vscode.Uri.joinPath(this.extensionUri, 'scripts', 'markupeditor_vs.js')
     
         // And the uris we use to load scripts in the webview
-        const scriptMarkupUri = webview.asWebviewUri(scriptMarkupPath);
-        const scriptMarkupBootstrapUri = webview.asWebviewUri(scriptMarkupBootstrapPath);
+        const scriptMarkupUri = webview.asWebviewUri(scriptMarkupPath)
+        const scriptMarkupBootstrapUri = webview.asWebviewUri(scriptMarkupBootstrapPath)
     
         // Local path to css styles
         // Note that mirror.css, markup.css, and codelog.css are unmodified copies from MarkupEditor and CodeLog.
-        const styleMirrorPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'mirror.css');
-        const styleMarkupPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'markup.css');
-        const styleToolbarPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'toolbar.css');
-        const styleMarkupVSPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'markup_vs.css');
-        const styleCodiconsPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'codicon.css');
+        const styleMirrorPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'mirror.css')
+        const styleMarkupPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'markup.css')
+        const styleToolbarPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'toolbar.css')
+        const styleMarkupVSPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'markup_vs.css')
+        const styleCodiconsPath = vscode.Uri.joinPath(this.extensionUri, 'styles', 'codicon.css')
     
         // Uri to load styles into webview
-        const styleMirrorUri = webview.asWebviewUri(styleMirrorPath);
-        const styleMarkupUri = webview.asWebviewUri(styleMarkupPath);
-        const styleToolbarUri = webview.asWebviewUri(styleToolbarPath);
-        const styleMarkupVSUri = webview.asWebviewUri(styleMarkupVSPath);
-        const styleCodiconsUri = webview.asWebviewUri(styleCodiconsPath);
+        const styleMirrorUri = webview.asWebviewUri(styleMirrorPath)
+        const styleMarkupUri = webview.asWebviewUri(styleMarkupPath)
+        const styleToolbarUri = webview.asWebviewUri(styleToolbarPath)
+        const styleMarkupVSUri = webview.asWebviewUri(styleMarkupVSPath)
+        const styleCodiconsUri = webview.asWebviewUri(styleCodiconsPath)
     
         // Use a nonce to only allow specific scripts to be run and images to load.
-        const nonce = getNonce();
+        const nonce = getNonce()
     
         //TODO: I had to include style-src 'unsafe-inline' to get some images to load, but I'm not sure why.
         return `<!DOCTYPE html>
@@ -180,7 +258,26 @@ export class MarkupCoordinator {
                         <script nonce="${nonce}" src="${scriptMarkupUri}"></script>
                         <script nonce="${nonce}" src="${scriptMarkupBootstrapUri}"></script>
                     </body>
-                </html>`;
-    };
+                </html>`
+    }
+
+    /**
+     * Mark the document as dirty so that it shows an indicator that it needs to be saved.
+     * 
+     * The operation is performed once when the initial `input` is received, an indicator that the 
+     * document was changed in the MarkupEditor.
+     * 
+     * @param {TextDocument} document 
+     */
+    async setDirty(document) {
+        const edit = new vscode.WorkspaceEdit();
+        edit.insert(document.uri, new vscode.Position(0,0), " ");
+        await vscode.workspace.applyEdit(edit);
+
+        const edit2 = new vscode.WorkspaceEdit();
+        edit2.delete(document.uri, new vscode.Range(new vscode.Position(0,0), new vscode.Position(0,1)));
+        await vscode.workspace.applyEdit(edit2);
+        this.dirty = true
+    }
 
 }
