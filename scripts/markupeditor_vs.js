@@ -1,5 +1,5 @@
 /**
- * Copyright © 2023-2024 Steven G. Harris. All rights reserved.
+ * Copyright © 2024-2025 Steven G. Harris. All rights reserved.
  *
  * A script that is loaded into the WebView in markupEditorProvider.js to 
  * populate the HTML that will be edited using the MarkupEditor and to 
@@ -10,9 +10,6 @@
 /** Set up message listeners used in the VSCode extension */
 bootstrapVsCode()
 
-/** Kick off the composition of the library contents */
-bootstrapCommonHtml();
-
 /**
  * Set up the vscode api global and the window callbacks to receive messages from the VSCode extension.
  */
@@ -20,13 +17,8 @@ async function bootstrapVsCode() {
 
     // Assign vscode so we can send messages
     vscode = acquireVsCodeApi();
-
-    // We want vscode to receive the callbacks from the MarkupEditor, which are handled in 
-    // markupEditorProvider.js.
-    MU.setMessageHandler(vscode);
     
     // Listen for messages coming from the extension.js code.
-    //
     // To state what may be obvious, the message received here is passed via JSON, so
     // cannot contain a reference to an object held by the sender. This also means that 
     // we cannot invoke methods on an object that was passed by the sender, because here 
@@ -34,6 +26,13 @@ async function bootstrapVsCode() {
     // an object passed by the sender are generally available, since they are properly 
     // serialized and deserialized via JSON.
     window.addEventListener('message', handleMessage);
+
+    // We want vscode to receive the callbacks from the MarkupEditor, which are handled in 
+    // markupEditorProvider.js. We do that by telling the MarkupEditor to use `vscode` as 
+    // its `messageHandler` when we instantiate the MarkupEditor.
+    new MU.MarkupEditor(
+        document.querySelector('#editor'), { messageHandler: vscode }
+    )
 };
 
 /**
@@ -48,39 +47,9 @@ async function handleMessage(event) {
            populateHTML(message.contents, message.uriPath);
            return;
        default:
-           handleMUCommand(message.command);
+           console.log('Unknown message type: ' + message.type);
            return;
     };
-}
-
-/** Cause the MarkupEditor to do something (e.g., in response to a hotkey) */
-function handleMUCommand(command) {
-    switch (command) {
-        case 'toggleBold':
-            MU.toggleBold();
-            return;
-        case 'toggleItalic':
-            MU.toggleItalic();
-            return;
-        case 'toggleUnderline':
-            MU.toggleUnderline();
-            return;
-        case 'toggleCode':
-            MU.toggleCode();
-            return;
-        case 'indent':
-            MU.indent();
-            return;
-        case 'outdent':
-            MU.outdent();
-            return;
-        default:
-            console.log('Unknown MU command: ' + command);
-    };
-};
-
-function bootstrapCommonHtml() {
-    new MU.MarkupEditor(document.querySelector('#editor'))
 }
 
 /**
